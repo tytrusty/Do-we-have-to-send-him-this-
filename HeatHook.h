@@ -30,7 +30,7 @@ public:
 
     virtual void updateRenderGeometry()
     {
-        renderQ = Q;
+        renderV = V;
         renderF = F;        
     }
 
@@ -38,7 +38,11 @@ public:
     
     virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     {
-        viewer.data().set_mesh(renderQ, renderF);
+        viewer.data().clear();
+        viewer.data().set_mesh(renderV, renderF);
+        igl::jet(u, true, C);
+        viewer.data().set_colors(C);
+
     }
 
     virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
@@ -46,28 +50,10 @@ public:
     virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer,  int button);
     
 private:
-    Eigen::MatrixXd origQ;
-    Eigen::MatrixXd prevQ;
-    Eigen::MatrixXd Q;
-    Eigen::MatrixXd Qdot;
+    Eigen::MatrixXd V;
     Eigen::MatrixXi F;
+    std::string meshFile_;
 
-    float dt;
-    int constraintIters;
-
-    bool gravityEnabled;
-    float gravityG;
-    bool pinEnabled;
-    float pinWeight;
-
-    bool stretchEnabled;
-    float stretchWeight;
-
-    bool bendingEnabled;
-    float bendingWeight;
-
-    bool pullingEnabled;
-    float pullingWeight;
 
     std::mutex mouseMutex;
     std::vector<MouseEvent> mouseEvents;
@@ -75,10 +61,13 @@ private:
     double clickedz;
     Eigen::Vector3d curPos; // the current position of the mouse cursor in 3D
 
-    Eigen::MatrixXd renderQ;
-    Eigen::MatrixXi renderF;
+    float dt;
 
-    std::map<Edge, std::vector<int>> diamonds;
-    std::vector<Eigen::Vector3d,Eigen::aligned_allocator<Eigen::Vector3d>> pinned;
-    std::vector<int> pinned_ids;
+    Eigen::SparseMatrix<double> L;
+    Eigen::SparseMatrix<double> M;
+    Eigen::VectorXd u;
+    Eigen::MatrixXd C;
+
+    Eigen::MatrixXd renderV;
+    Eigen::MatrixXi renderF;
 };
