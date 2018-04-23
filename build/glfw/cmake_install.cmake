@@ -1,4 +1,4 @@
-# Install script for directory: /home/ty/Physim/libigl/external/glfw
+# Install script for directory: /u/evouga/tools/libigl/external/glfw
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,7 +34,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("/home/ty/Physim/heat/build/glfw/src/cmake_install.cmake")
+  include("/u/tytrusty/Desktop/Do-we-have-to-send-him-this-/build/glfw/src/cmake_install.cmake")
 
 endif()
 

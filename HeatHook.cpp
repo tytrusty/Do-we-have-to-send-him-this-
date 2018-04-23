@@ -154,10 +154,51 @@ void HeatHook::initSimulation()
     b[1] = 1.0;
     u = VectorXd(V.rows());
 
+    // Solve for u
     SparseMatrix<double> A = M - dt*L;
     ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
     cg.compute(A);
     u = cg.solve(b);
+
+    // get u gradient
+    int nfaces = F.rows();
+    MatrixXd ugrad(nfaces, 3);
+    ugrad.setZero();
+    for (int i = 0; i < nfaces; i++) { 
+        Vector3i face = F.row(i);
+        Vector3d e1 = V.row(face[1]) - V.row(face[0]);
+        Vector3d e2 = V.row(face[2]) - V.row(face[0]);
+        Vector3d normal = e1.cross(e2);
+        for (int j = 0; j < 3; j++) {
+            Vector3d oppEdge = V.row(face[(j+2)%3]) - V.row(face[(j+1)%3]);
+            ugrad.row(i) += V.row(face[j])*(normal.cross(oppEdge));
+        }
+        ugrad.row(i) /= (e1.cross(e2)).norm();
+    }
+
+    // normalize u grad
+    for (int i = 0; i < nfaces; i++) {
+        ugrad.row(i) /= -ugrad.row(i).norm();
+    }
+
+    // divergence
+    VectorXd div = VectorXd::Zero(V.rows());
+    for (int i = 0; i < nfaces; i++) {
+        Vector3i face = F.row(i);
+        for (int j = 0; j < 3; j++) {
+            Vector3d e1 = V.row(face[(j+1)%3]) - V.row(face[j]);
+            Vector3d e2 = V.row(face[(j+2)%3]) - V.row(face[j]);
+            Vector3d e3 = e2 - e1;
+            double cot1 = e2.dot(e3)/(-e2).cross(-e3).norm();
+            double cot2 = (-e1).dot(e3)/(-e1).cross(e3).norm();
+            div[i] += 0.5*(cot1*(e1.dot(ugrad.row(i))) + cot2*(e2.dot(ugrad.row(i))));
+        }
+    }
+
+    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg2;
+    cg2.compute(L);
+    u = cg.solve(div);
+
 }
 
 bool HeatHook::simulateOneStep()

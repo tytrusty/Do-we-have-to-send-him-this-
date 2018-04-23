@@ -4,13 +4,13 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_C
-  "/home/ty/Physim/libigl/external/glad/src/glad.c" "/home/ty/Physim/heat/build/glad/CMakeFiles/glad.dir/src/glad.c.o"
+  "/u/evouga/tools/libigl/external/glad/src/glad.c" "/u/tytrusty/Desktop/Do-we-have-to-send-him-this-/build/glad/CMakeFiles/glad.dir/src/glad.c.o"
   )
 set(CMAKE_C_COMPILER_ID "GNU")
 
 # The include file search paths:
 set(CMAKE_C_TARGET_INCLUDE_PATH
-  "/home/ty/Physim/libigl/external/glad/include"
+  "/u/evouga/tools/libigl/external/glad/include"
   )
 
 # Targets to which this target links.

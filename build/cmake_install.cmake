@@ -1,4 +1,4 @@
-# Install script for directory: /home/ty/Physim/heat
+# Install script for directory: /u/tytrusty/Desktop/Do-we-have-to-send-him-this-
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,9 +34,9 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("/home/ty/Physim/heat/build/glad/cmake_install.cmake")
-  include("/home/ty/Physim/heat/build/glfw/cmake_install.cmake")
-  include("/home/ty/Physim/heat/build/imgui/cmake_install.cmake")
+  include("/u/tytrusty/Desktop/Do-we-have-to-send-him-this-/build/glad/cmake_install.cmake")
+  include("/u/tytrusty/Desktop/Do-we-have-to-send-him-this-/build/glfw/cmake_install.cmake")
+  include("/u/tytrusty/Desktop/Do-we-have-to-send-him-this-/build/imgui/cmake_install.cmake")
 
 endif()
 
@@ -48,5 +48,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/ty/Physim/heat/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/u/tytrusty/Desktop/Do-we-have-to-send-him-this-/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

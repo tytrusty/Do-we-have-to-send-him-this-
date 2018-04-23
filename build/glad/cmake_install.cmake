@@ -1,4 +1,4 @@
-# Install script for directory: /home/ty/Physim/libigl/external/glad
+# Install script for directory: /u/evouga/tools/libigl/external/glad
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

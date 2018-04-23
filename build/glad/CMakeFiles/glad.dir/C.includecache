@@ -1,4 +1,4 @@
-#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
 
 #IncludeRegexScan: ^.*$
 
@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/ty/Physim/libigl/external/glad/include/KHR/khrplatform.h
+/u/evouga/tools/libigl/external/glad/include/KHR/khrplatform.h
 stdint.h
 -
 inttypes.h
@@ -14,7 +14,7 @@ inttypes.h
 stdint.h
 -
 
-/home/ty/Physim/libigl/external/glad/include/glad/glad.h
+/u/evouga/tools/libigl/external/glad/include/glad/glad.h
 windows.h
 -
 stddef.h
@@ -34,7 +34,7 @@ stdint.h
 inttypes.h
 -
 
-/home/ty/Physim/libigl/external/glad/src/glad.c
+/u/evouga/tools/libigl/external/glad/src/glad.c
 stdio.h
 -
 stdlib.h

@@ -1,1 +1,1 @@
-/usr/bin/c++  -O3 -DNDEBUG  -rdynamic CMakeFiles/heat_bin.dir/HeatHook.cpp.o CMakeFiles/heat_bin.dir/main.cpp.o  -o heat_bin -lGL imgui/libimgui.a glfw/src/libglfw3.a -lrt -lm -lX11 -lpthread glad/libglad.a -ldl 
+/usr/bin/c++   -O3 -DNDEBUG   CMakeFiles/heat_bin.dir/HeatHook.cpp.o CMakeFiles/heat_bin.dir/main.cpp.o  -o heat_bin -rdynamic -lGL imgui/libimgui.a glfw/src/libglfw3.a -lrt -lm -lX11 -lpthread glad/libglad.a -ldl 
