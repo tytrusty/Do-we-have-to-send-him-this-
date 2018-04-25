@@ -40,7 +40,7 @@ public:
     {
         viewer.data().clear();
         viewer.data().set_mesh(renderV, renderF);
-        igl::jet(u, true, C);
+        igl::jet(phi, true, C);
         viewer.data().set_colors(C);
 
     }
@@ -50,8 +50,11 @@ public:
     virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer,  int button);
     
 private:
+    void integrateHeat(Eigen::MatrixXd&);
+
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
+    Eigen::VectorXd phi;
     std::string meshFile_;
 
 

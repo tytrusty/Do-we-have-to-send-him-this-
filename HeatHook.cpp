@@ -12,7 +12,7 @@ HeatHook::HeatHook() : PhysicsHook()
 {
     clickedVertex = -1;
     dt = 1e0;
-    meshFile_ = "cube.obj";
+    meshFile_ = "rect-coarse.obj";
 }
 
 void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -134,9 +134,42 @@ void HeatHook::tick()
     mouseMutex.unlock();
 }
 
+void HeatHook::integrateHeat(MatrixXd& ugrad)
+{
+    VectorXd b = VectorXd::Zero(V.rows());
+    b[0] = 1.0;
+    // b[1] = 1.0;
+    VectorXd u = VectorXd(V.rows());
+
+    // solve heat flow
+    SparseMatrix<double> A = M - dt*L;
+    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    cg.compute(A);
+    u = cg.solve(b);
+
+    // evaluate flow field
+    int nfaces = F.rows();
+    ugrad.setZero();
+    // get u gradient
+    for (int i = 0; i < nfaces; i++) { 
+        Vector3i face = F.row(i);
+        Vector3d e1 = V.row(face[1]) - V.row(face[0]);
+        Vector3d e2 = V.row(face[2]) - V.row(face[0]);
+        Vector3d normal = e1.cross(e2);
+        for (int j = 0; j < 3; j++) {
+            Vector3d oppEdge = V.row(face[(j+2)%3]) - V.row(face[(j+1)%3]);
+            ugrad.row(i) += u[face[j]]*(normal.cross(oppEdge));
+        }
+        ugrad.row(i) /= (e1.cross(e2)).norm(); // divide by area of face
+        ugrad.row(i) /= -ugrad.row(i).norm();  // normalize and flip direction
+    }
+}
+
 
 void HeatHook::initSimulation()
 {
+    Eigen::initParallel();
+    std::cout << "Num threads: " << Eigen::nbThreads();
 	std::string meshfname = std::string("meshes/") + meshFile_;
     if(!igl::readOBJ(meshfname, V, F))
         meshfname = std::string("../meshes/") + meshFile_;
@@ -145,44 +178,16 @@ void HeatHook::initSimulation()
             std::cerr << "Couldn't read mesh file" << std::endl;
             exit(-1);
         }
-    V *= 40.0;
+    // V *= 40.0; 
     igl::cotmatrix(V, F, L);
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
-
-    VectorXd b = VectorXd::Zero(V.rows());
-    b[0] = 1.0;
-    b[1] = 1.0;
-    u = VectorXd(V.rows());
-
-    // Solve for u
-    SparseMatrix<double> A = M - dt*L;
-    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
-    cg.compute(A);
-    u = cg.solve(b);
-
-    // get u gradient
     int nfaces = F.rows();
     MatrixXd ugrad(nfaces, 3);
-    ugrad.setZero();
-    for (int i = 0; i < nfaces; i++) { 
-        Vector3i face = F.row(i);
-        Vector3d e1 = V.row(face[1]) - V.row(face[0]);
-        Vector3d e2 = V.row(face[2]) - V.row(face[0]);
-        Vector3d normal = e1.cross(e2);
-        for (int j = 0; j < 3; j++) {
-            Vector3d oppEdge = V.row(face[(j+2)%3]) - V.row(face[(j+1)%3]);
-            ugrad.row(i) += V.row(face[j])*(normal.cross(oppEdge));
-        }
-        ugrad.row(i) /= (e1.cross(e2)).norm();
-    }
-
-    // normalize u grad
-    for (int i = 0; i < nfaces; i++) {
-        ugrad.row(i) /= -ugrad.row(i).norm();
-    }
+    integrateHeat(ugrad);
 
     // divergence
     VectorXd div = VectorXd::Zero(V.rows());
+    phi = VectorXd::Zero(V.rows());
     for (int i = 0; i < nfaces; i++) {
         Vector3i face = F.row(i);
         for (int j = 0; j < 3; j++) {
@@ -191,13 +196,13 @@ void HeatHook::initSimulation()
             Vector3d e3 = e2 - e1;
             double cot1 = e2.dot(e3)/(-e2).cross(-e3).norm();
             double cot2 = (-e1).dot(e3)/(-e1).cross(e3).norm();
-            div[i] += 0.5*(cot1*(e1.dot(ugrad.row(i))) + cot2*(e2.dot(ugrad.row(i))));
+            div[face[j]] += 0.5*(cot1*(e1.dot(ugrad.row(i))) + cot2*(e2.dot(ugrad.row(i))));
         }
     }
 
-    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg2;
-    cg2.compute(L);
-    u = cg.solve(div);
+    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    cg.compute(L);
+    phi = cg.solve(div);
 
 }
 
