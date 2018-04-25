@@ -1,10 +1,10 @@
 #include "HeatHook.h"
-#include <limits>
-#include <map>
 #include <igl/unproject_onto_mesh.h>
 #include <igl/cotmatrix.h>
-#include <limits>
 #include "igl/opengl/glfw/imgui/ImGuiHelpers.h"
+#include <map>
+#include <omp.h>
+#include "Solver.h"
 
 using namespace Eigen;
 
@@ -13,6 +13,8 @@ HeatHook::HeatHook() : PhysicsHook()
     clickedVertex = -1;
     dt = 1e0;
     meshFile_ = "rect-coarse.obj";
+    solverIters = 40;
+    solverTol = 1e-7;
 }
 
 void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -24,6 +26,8 @@ void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 	if (ImGui::CollapsingHeader("Simulation Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::InputFloat("Timestep", &dt, 0, 0, 3);
+        ImGui::InputInt("Solver Iters", &solverIters);
+        ImGui::InputFloat("Solver Tolerance", &solverTol, 0, 0, 12);
 	}
 }
 
@@ -136,21 +140,23 @@ void HeatHook::tick()
 
 void HeatHook::integrateHeat(MatrixXd& ugrad)
 {
-    VectorXd b = VectorXd::Zero(V.rows());
-    b[0] = 1.0;
-    // b[1] = 1.0;
+    double start;
     VectorXd u = VectorXd(V.rows());
 
+    start = omp_get_wtime();
     // solve heat flow
     SparseMatrix<double> A = M - dt*L;
     ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
     cg.compute(A);
-    u = cg.solve(b);
+    u = cg.solve(source);
+    std::cout << "solve heat time (s): " << omp_get_wtime() - start << std::endl;
 
+    start = omp_get_wtime();
     // evaluate flow field
     int nfaces = F.rows();
     ugrad.setZero();
     // get u gradient
+    #pragma omp parallel for 
     for (int i = 0; i < nfaces; i++) { 
         Vector3i face = F.row(i);
         Vector3d e1 = V.row(face[1]) - V.row(face[0]);
@@ -163,31 +169,16 @@ void HeatHook::integrateHeat(MatrixXd& ugrad)
         ugrad.row(i) /= (e1.cross(e2)).norm(); // divide by area of face
         ugrad.row(i) /= -ugrad.row(i).norm();  // normalize and flip direction
     }
+    std::cout << "compute ugrad time (s): " << omp_get_wtime() - start << std::endl;
 }
 
-
-void HeatHook::initSimulation()
+void HeatHook::solveDistance(const MatrixXd& ugrad) 
 {
-    Eigen::initParallel();
-    std::cout << "Num threads: " << Eigen::nbThreads();
-	std::string meshfname = std::string("meshes/") + meshFile_;
-    if(!igl::readOBJ(meshfname, V, F))
-        meshfname = std::string("../meshes/") + meshFile_;
-        if (!igl::readOBJ(meshfname, V, F))
-        {
-            std::cerr << "Couldn't read mesh file" << std::endl;
-            exit(-1);
-        }
-    // V *= 40.0; 
-    igl::cotmatrix(V, F, L);
-    igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
-    int nfaces = F.rows();
-    MatrixXd ugrad(nfaces, 3);
-    integrateHeat(ugrad);
-
     // divergence
+    double start = omp_get_wtime();
     VectorXd div = VectorXd::Zero(V.rows());
     phi = VectorXd::Zero(V.rows());
+    int nfaces = F.rows();
     for (int i = 0; i < nfaces; i++) {
         Vector3i face = F.row(i);
         for (int j = 0; j < 3; j++) {
@@ -199,13 +190,59 @@ void HeatHook::initSimulation()
             div[face[j]] += 0.5*(cot1*(e1.dot(ugrad.row(i))) + cot2*(e2.dot(ugrad.row(i))));
         }
     }
+    std::cout << "div computation time (s): " << omp_get_wtime() - start << std::endl;
+    // Solve for distance
+    start = omp_get_wtime();
+    Solver::gauss_seidel_parallel(L, div, phi);
+    // Finds a different solution ???
+    // ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    // cg.setTolerance(1e-12);
+    // cg.compute(L);
+    // phi = cg.solve(div);
+    std::cout << "solve dist time (s): " << omp_get_wtime() - start << std::endl;
+}
 
-    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
-    cg.compute(L);
-    phi = cg.solve(div);
 
+void HeatHook::initSimulation()
+{
+    Eigen::initParallel();
+    std::cout << "Num threads: " << Eigen::nbThreads() << std::endl;
+    #pragma omp parallel
+    {// std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
+    }
+
+	std::string meshfname = std::string("meshes/") + meshFile_;
+    if(!igl::readOBJ(meshfname, V, F))
+        meshfname = std::string("../meshes/") + meshFile_;
+        if (!igl::readOBJ(meshfname, V, F))
+        {
+            std::cerr << "Couldn't read mesh file" << std::endl;
+            exit(-1);
+        }
+    V *= 40.0; 
+    // V /= 10.0;
+    prevClicked = -1;
+
+    double start;
+    start = omp_get_wtime();
+    igl::cotmatrix(V, F, L);
+    igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
+    std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
+    source = VectorXd::Zero(V.rows());
+    phi    = VectorXd::Zero(V.rows());
 }
 
 bool HeatHook::simulateOneStep()
 {
+    if (clickedVertex != -1 && clickedVertex != prevClicked)
+    {
+        source[clickedVertex] = 1.0;
+        std::cout << "clicked: " << clickedVertex << std::endl;
+        int nfaces = F.rows();
+        MatrixXd ugrad(nfaces, 3);
+        integrateHeat(ugrad);
+        solveDistance(ugrad);
+        prevClicked = clickedVertex;
+    }
+    return false;
 }

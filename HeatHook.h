@@ -1,3 +1,5 @@
+#ifndef HEATHOOK_H
+#define HEATHOOK_H
 #include "PhysicsHook.h"
 #include <igl/readOBJ.h>
 #include <iostream>
@@ -51,6 +53,7 @@ public:
     
 private:
     void integrateHeat(Eigen::MatrixXd&);
+    void solveDistance(const Eigen::MatrixXd& ugrad);
 
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
@@ -61,16 +64,22 @@ private:
     std::mutex mouseMutex;
     std::vector<MouseEvent> mouseEvents;
     int clickedVertex; // the currently selected vertex (-1 if no vertex)
+    int prevClicked;
     double clickedz;
     Eigen::Vector3d curPos; // the current position of the mouse cursor in 3D
 
     float dt;
+    int solverIters;
+    float solverTol;
 
     Eigen::SparseMatrix<double> L;
     Eigen::SparseMatrix<double> M;
     Eigen::VectorXd u;
+    Eigen::VectorXd source;
     Eigen::MatrixXd C;
 
     Eigen::MatrixXd renderV;
     Eigen::MatrixXi renderF;
 };
+
+#endif // HEATHOOK_H
