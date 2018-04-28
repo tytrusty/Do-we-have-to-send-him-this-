@@ -195,10 +195,9 @@ void HeatHook::solveDistance(const MatrixXd& ugrad)
     start = omp_get_wtime();
     Solver::gauss_seidel_parallel(L, div, phi);
     // Finds a different solution ???
-    // ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
-    // cg.setTolerance(1e-12);
-    // cg.compute(L);
-    // phi = cg.solve(div);
+    //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    //cg.compute(L);
+    //phi = cg.solve(div);
     std::cout << "solve dist time (s): " << omp_get_wtime() - start << std::endl;
 }
 
@@ -208,7 +207,8 @@ void HeatHook::initSimulation()
     Eigen::initParallel();
     std::cout << "Num threads: " << Eigen::nbThreads() << std::endl;
     #pragma omp parallel
-    {// std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
+    {
+        std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
     }
 
 	std::string meshfname = std::string("meshes/") + meshFile_;
@@ -219,7 +219,7 @@ void HeatHook::initSimulation()
             std::cerr << "Couldn't read mesh file" << std::endl;
             exit(-1);
         }
-    V *= 40.0; 
+    // V *= 40.0; 
     // V /= 10.0;
     prevClicked = -1;
 
