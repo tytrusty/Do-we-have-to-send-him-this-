@@ -12,6 +12,7 @@ HeatHook::HeatHook() : PhysicsHook()
 {
     clickedVertex = -1;
     dt = 1e0;
+    mcf_dt = 1e-5;
     meshFile_ = "rect-coarse.obj";
     solverIters = 40;
     solverTol = 1e-7;
@@ -227,6 +228,8 @@ void HeatHook::initSimulation()
     start = omp_get_wtime();
     igl::cotmatrix(V, F, L);
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
+    Morig = M;
+    Vdot = MatrixXd::Zero(V.rows(), V.cols());
     std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
     source = VectorXd::Zero(V.rows());
     phi    = VectorXd::Zero(V.rows());
@@ -234,8 +237,22 @@ void HeatHook::initSimulation()
 
 bool HeatHook::simulateOneStep()
 {
+    //V += mcf_dt * Vdot;
+    //std::cout << std::sqrt(Morig.diagonal().prod() * 1./M.diagonal().prod()) << std::endl;
+    //Vdot = -std::sqrt(Morig.diagonal().prod() * 1./M.diagonal().prod()) * L * V;
+
+    SimplicialLDLT<SparseMatrix<double>> solver;
+    solver.compute(M - mcf_dt*L);
+    V = solver.solve(M * V);
+
+    igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
+
     if (clickedVertex != -1 && clickedVertex != prevClicked)
     {
+        // Update params
+        Solver::updateIters(solverIters);
+        Solver::updateTolerance(solverTol);
+
         source[clickedVertex] = 1.0;
         std::cout << "clicked: " << clickedVertex << std::endl;
         int nfaces = F.rows();

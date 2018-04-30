@@ -41,7 +41,7 @@ public:
     virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     {
         viewer.data().clear();
-        viewer.data().set_mesh(renderV, renderF);
+        viewer.data().set_mesh(V, F);
         igl::jet(phi, true, C);
         viewer.data().set_colors(C);
 
@@ -69,14 +69,17 @@ private:
     Eigen::Vector3d curPos; // the current position of the mouse cursor in 3D
 
     float dt;
+    double mcf_dt;
     int solverIters;
     float solverTol;
 
     Eigen::SparseMatrix<double> L;
     Eigen::SparseMatrix<double> M;
+    Eigen::SparseMatrix<double> Morig;
     Eigen::VectorXd u;
     Eigen::VectorXd source;
     Eigen::MatrixXd C;
+    Eigen::MatrixXd Vdot;
 
     Eigen::MatrixXd renderV;
     Eigen::MatrixXi renderF;
