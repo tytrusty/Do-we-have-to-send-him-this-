@@ -41,7 +41,7 @@ public:
     virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     {
         viewer.data().clear();
-        viewer.data().set_mesh(V, F);
+        viewer.data().set_mesh(renderV, renderF);
         igl::jet(phi, true, C);
         viewer.data().set_colors(C);
 
