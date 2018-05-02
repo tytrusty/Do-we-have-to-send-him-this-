@@ -37,7 +37,7 @@ namespace Solver
         VectorXd xold;
         while (iters < max_iters && error >= tolerance) {
             xold = x;
-            #pragma omp parallel for private(dxi)  
+            // #pragma omp parallel for private(dxi)  
             for (int i = 0; i < A.outerSize(); ++i) {
                 dxi = b.coeff(i);
                 for(SparseMatrix<double>::InnerIterator it(A,i); it; ++it) {

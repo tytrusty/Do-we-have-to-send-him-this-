@@ -49,7 +49,8 @@ public:
         igl::isolines(V, F, phi, 30, isoV, isoE);
 
         viewer.data().clear();
-        viewer.data().set_mesh(renderV, renderF);
+        //viewer.data().set_mesh(renderV, renderF);
+        viewer.data().set_mesh(V, F);
         igl::jet(phi, true, C);
         viewer.data().set_colors(C);
         viewer.data().set_edges(isoV, isoE, Eigen::RowVector3d(0.,0.,0.));

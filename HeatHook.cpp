@@ -5,14 +5,15 @@
 #include <map>
 #include <omp.h>
 #include "Solver.h"
-
+#include <string>
+#include <igl/readPLY.h>
 using namespace Eigen;
 
 HeatHook::HeatHook() : PhysicsHook() 
 {
     clickedVertex = -1;
     dt = 1e0;
-    mcf_dt = 5e-4;
+    mcf_dt = 1e-2;
     meshFile_ = "rect-coarse.obj";
     solverIters = 40;
     solverTol = 1e-7;
@@ -147,9 +148,10 @@ void HeatHook::integrateHeat(MatrixXd& ugrad)
     start = omp_get_wtime();
     // solve heat flow
     SparseMatrix<double> A = M - dt*L;
-    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
-    cg.compute(A);
-    u = cg.solve(source);
+    //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    //cg.compute(A);
+    //u = cg.solve(source);
+    Solver::gauss_seidel(A, source, u);
     std::cout << "solve heat time (s): " << omp_get_wtime() - start << std::endl;
 
     start = omp_get_wtime();
@@ -212,15 +214,26 @@ void HeatHook::initSimulation()
         std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
     }
 
-	std::string meshfname = std::string("meshes/") + meshFile_;
-    if(!igl::readOBJ(meshfname, V, F))
-        meshfname = std::string("../meshes/") + meshFile_;
-        if (!igl::readOBJ(meshfname, V, F))
+	std::string meshfname = std::string("../meshes/") + meshFile_;
+    std::string ext = meshFile_.substr(meshFile_.find_last_of(".")+1);
+    if (ext == "obj") {
+        std::cout << "Reading OBJ file" << std::endl;
+        if(!igl::readOBJ(meshfname, V, F))
         {
             std::cerr << "Couldn't read mesh file" << std::endl;
             exit(-1);
         }
-    // V *= 40.0; 
+    } else if (ext == "ply") {
+        std::cout << "Reading PLY file" << std::endl;
+        if(!igl::readPLY(meshfname, V, F))
+        {
+            std::cerr << "Couldn't read mesh file" << std::endl;
+            exit(-1);
+        }
+        std::cout << "Done reading PLY" << std::endl;
+
+    }
+    V *= 10.0; 
     // V /= 10.0;
     prevClicked = -1;
 
@@ -244,13 +257,12 @@ bool HeatHook::simulateOneStep()
     //Vdot = -std::sqrt(Morig.diagonal().prod() * 1./M.diagonal().prod()) * L * V;
 
     SimplicialLDLT<SparseMatrix<double>> solver;
-    double prefactor = std::sqrt(Morig.diagonal().cwiseQuotient(M.diagonal()).prod());
+    double prefactor = 1; // std::sqrt(Morig.diagonal().cwiseQuotient(M.diagonal()).prod());
     //std::cout << Morig.diagonal() << std::endl;
     std::cout << prefactor << std::endl;
     solver.compute(M - prefactor*mcf_dt*L);
-    V = solver.solve(M * V);
-
-    V /= std::sqrt(M.diagonal().sum()); // rescale
+    //V = solver.solve(M * V);
+    //V /= std::sqrt(M.diagonal().sum()); // rescale
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
     // igl::cotmatrix(V, F, L);
 
