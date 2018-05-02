@@ -3,6 +3,10 @@
 #include "PhysicsHook.h"
 #include <igl/readOBJ.h>
 #include <iostream>
+#include <igl/isolines.h>
+#include <igl/edges.h>
+#include <igl/components.h>
+#include <Eigen/Core>
 
 typedef std::tuple<int, int> Edge;
 
@@ -40,16 +44,21 @@ public:
     
     virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     {
+        Eigen::MatrixXd isoV;
+        Eigen::MatrixXi isoE;
+        igl::isolines(V, F, phi, 30, isoV, isoE);
+
         viewer.data().clear();
         viewer.data().set_mesh(renderV, renderF);
         igl::jet(phi, true, C);
         viewer.data().set_colors(C);
+        viewer.data().set_edges(isoV, isoE, Eigen::RowVector3d(0.,0.,0.));
 
     }
 
     virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
     virtual bool mouseReleased(igl::opengl::glfw::Viewer &viewer,  int button);
-    virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer,  int button);
+    // virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer,  int button);
     
 private:
     void integrateHeat(Eigen::MatrixXd&);

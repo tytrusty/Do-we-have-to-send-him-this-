@@ -44,7 +44,7 @@ bool HeatHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
     MouseEvent me;
     bool ret = true;
     if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
-        viewer.core.proj, viewer.core.viewport, renderV, renderF, fid, bc))
+        viewer.core.proj, viewer.core.viewport, V, F, fid, bc))
     {
         int bestvert = -1;
         double bestcoord = 2.0;
@@ -57,12 +57,12 @@ bool HeatHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
             }
         }
         me.type = MouseEvent::ME_CLICKED;
-        me.vertex = renderF(fid, bestvert);        
+        me.vertex = F(fid, bestvert);        
         
         Eigen::Vector3f proj;
         Eigen::Vector3f pt;
         for (int i = 0; i < 3; i++)
-            pt[i] = renderV(me.vertex, i);
+            pt[i] = V(me.vertex, i);
         Eigen::Matrix4f modelview = viewer.core.view * viewer.core.model;
         proj = igl::project(pt, modelview,
             viewer.core.proj, viewer.core.viewport);
@@ -101,20 +101,20 @@ bool HeatHook::mouseReleased(igl::opengl::glfw::Viewer &viewer, int button)
     return false;
 }
 
-bool HeatHook::mouseMoved(igl::opengl::glfw::Viewer &viewer, int button)
-{
-    MouseEvent me;
-    me.type = MouseEvent::ME_DRAGGED;    
-    double x = viewer.current_mouse_x;
-    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-    Eigen::Vector3d pos(x, y, clickedz);
-    igl::unproject(pos, viewer.core.view * viewer.core.model,
-        viewer.core.proj, viewer.core.viewport, me.pos);
-    mouseMutex.lock();
-    mouseEvents.push_back(me);
-    mouseMutex.unlock();
-    return false;
-}
+//bool HeatHook::mouseMoved(igl::opengl::glfw::Viewer &viewer, int button)
+//{
+//    MouseEvent me;
+//    me.type = MouseEvent::ME_DRAGGED;    
+//    double x = viewer.current_mouse_x;
+//    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+//    Eigen::Vector3d pos(x, y, clickedz);
+//    igl::unproject(pos, viewer.core.view * viewer.core.model,
+//        viewer.core.proj, viewer.core.viewport, me.pos);
+//    mouseMutex.lock();
+//    mouseEvents.push_back(me);
+//    mouseMutex.unlock();
+//    return false;
+//}
 
 void HeatHook::tick()
 {
@@ -194,7 +194,7 @@ void HeatHook::solveDistance(const MatrixXd& ugrad)
     std::cout << "div computation time (s): " << omp_get_wtime() - start << std::endl;
     // Solve for distance
     start = omp_get_wtime();
-    Solver::gauss_seidel_parallel(L, div, phi);
+    Solver::gauss_seidel(L, div, phi);
     // Finds a different solution ???
     //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
     //cg.compute(L);

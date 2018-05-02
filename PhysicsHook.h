@@ -150,10 +150,10 @@ protected:
             }
             else
             {
+                done = simulateOneStep();
                 render_mutex.lock();
                 updateRenderGeometry();
                 render_mutex.unlock();
-                done = simulateOneStep();
             }
             status_mutex.lock();
             if (please_die)

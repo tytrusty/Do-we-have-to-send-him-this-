@@ -27,7 +27,7 @@ namespace Solver
         norm = std::sqrt(norm);
     }
 
-    void gauss_seidel(const SparseMatrix<double>& A, const SparseVector<double>& b, VectorXd& x)
+    void gauss_seidel(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x)
     {
         int iters = 0;
         x.setZero();
@@ -54,29 +54,11 @@ namespace Solver
         std::cout << "iters : " << iters << std::endl;
     }
 
-    void gauss_seidel_parallel(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x)
+    void restrict() {}
+    void prolong() {}
+    void muiltigrid(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x)
     {
-        int iters = 0;
-        x.setZero();
-        double dxi = 0.0;
-        int size = x.size();
-        double error = 1.0;
-        VectorXd xold;
-        while (iters < max_iters && error >= tolerance) {
-            xold = x;
-            #pragma omp parallel for private(dxi)  
-            for (int i = 0; i < A.outerSize(); ++i) {
-                dxi = b[i];
-                for(SparseMatrix<double>::InnerIterator it(A,i); it; ++it) {
-                    if (it.index() != i)
-                        dxi -= it.value()*x[it.index()];
-                }
-                x[i] = dxi/A.coeff(i,i);
-            }
-            ++iters;
-            fast_error(x, xold, error);
-        }
-        std::cout << "iters : " << iters << std::endl;
+
     }
 }
 
