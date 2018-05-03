@@ -7,16 +7,68 @@
 #include "Solver.h"
 #include <string>
 #include <igl/readPLY.h>
+// #include <boundingmesh.h>
 using namespace Eigen;
 
 HeatHook::HeatHook() : PhysicsHook() 
 {
     clickedVertex = -1;
     dt = 1e0;
-    mcf_dt = 1e-2;
+    mcf_dt = 1e-5;
     meshFile_ = "rect-coarse.obj";
     solverIters = 40;
     solverTol = 1e-7;
+}
+
+double HeatHook::computeVolume() {
+    double volume_ = 0;
+    for (int i = 0; i < F.rows(); i++)
+    {
+        Vector3d pts[3];
+        Vector3d centroid(0, 0, 0);
+        for (int j = 0; j < 3; j++)
+        {
+            pts[j] = V.row(F(i, j));
+            centroid += pts[j];
+        }
+        Vector3d normal = (pts[1] - pts[0]).cross(pts[2] - pts[0]);
+        double area = 0.5 * normal.norm();
+        normal /= normal.norm();
+
+        centroid /= 3.0;
+        volume_ += centroid.dot(normal) * area / 3.0;
+    }
+	return volume_;
+}
+
+Vector3d HeatHook::computeCenterOfMass(double volume_) {
+    Vector3d cm(0, 0, 0);
+    for (int i = 0; i < F.rows(); i++)
+    {
+        Vector3d pts[3];
+        for (int j = 0; j < 3; j++)
+        {
+            pts[j] = V.row(F(i, j));
+        }
+        Vector3d normal = (pts[1] - pts[0]).cross(pts[2] - pts[0]);
+        double area = 0.5 * normal.norm();
+        normal /= normal.norm();
+
+        Vector3d term(0, 0, 0);
+        for (int j = 0; j < 3; j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                for (int l = k; l < 3; l++)
+                    term[j] += pts[k][j] * pts[l][j];
+            }
+            term[j] *= area*normal[j] / 12.0;
+        }
+
+        cm += term;
+    }
+
+    return cm / volume_;
 }
 
 void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
@@ -102,20 +154,54 @@ bool HeatHook::mouseReleased(igl::opengl::glfw::Viewer &viewer, int button)
     return false;
 }
 
-//bool HeatHook::mouseMoved(igl::opengl::glfw::Viewer &viewer, int button)
-//{
-//    MouseEvent me;
-//    me.type = MouseEvent::ME_DRAGGED;    
-//    double x = viewer.current_mouse_x;
-//    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
-//    Eigen::Vector3d pos(x, y, clickedz);
-//    igl::unproject(pos, viewer.core.view * viewer.core.model,
-//        viewer.core.proj, viewer.core.viewport, me.pos);
-//    mouseMutex.lock();
-//    mouseEvents.push_back(me);
-//    mouseMutex.unlock();
-//    return false;
-//}
+bool HeatHook::mouseMoved(igl::opengl::glfw::Viewer &viewer, int button)
+{
+    MouseEvent me;
+    me.type = MouseEvent::ME_DRAGGED;    
+    double x = viewer.current_mouse_x;
+    double y = viewer.core.viewport(3) - viewer.current_mouse_y;
+    int fid;
+    Eigen::Vector3f bc;
+    if (igl::unproject_onto_mesh(Eigen::Vector2f(x, y), viewer.core.view * viewer.core.model,
+        viewer.core.proj, viewer.core.viewport, V, F, fid, bc))
+    {
+        int bestvert = -1;
+        double bestcoord = 2.0;
+        for (int j = 0; j < 3; j++)
+        {
+            if (bc[j] < bestcoord)
+            {
+                bestcoord = bc[j];
+                bestvert = j;
+            }
+        }
+        me.type = MouseEvent::ME_CLICKED;
+        me.vertex = F(fid, bestvert);        
+        
+        Eigen::Vector3f proj;
+        Eigen::Vector3f pt;
+        for (int i = 0; i < 3; i++)
+            pt[i] = V(me.vertex, i);
+        Eigen::Matrix4f modelview = viewer.core.view * viewer.core.model;
+        proj = igl::project(pt, modelview,
+            viewer.core.proj, viewer.core.viewport);
+
+        clickedz = proj[2];
+        Eigen::Vector3f pos;
+        pos[0] = float(x);
+        pos[1] = float(y);
+        pos[2] = float(clickedz);
+        Eigen::Vector3f unproj = igl::unproject(pos, modelview,
+            viewer.core.proj, viewer.core.viewport);
+        for (int i = 0; i < 3; i++)
+            me.pos[i] = unproj[i];
+    }
+
+    mouseMutex.lock();
+    mouseEvents.push_back(me);
+    mouseMutex.unlock();
+    return false;
+}
 
 void HeatHook::tick()
 {
@@ -148,10 +234,10 @@ void HeatHook::integrateHeat(MatrixXd& ugrad)
     start = omp_get_wtime();
     // solve heat flow
     SparseMatrix<double> A = M - dt*L;
-    //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
-    //cg.compute(A);
-    //u = cg.solve(source);
-    Solver::gauss_seidel(A, source, u);
+    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    cg.compute(A);
+    u = cg.solve(source);
+    // Solver::gauss_seidel(A, source, u);
     std::cout << "solve heat time (s): " << omp_get_wtime() - start << std::endl;
 
     start = omp_get_wtime();
@@ -248,37 +334,68 @@ void HeatHook::initSimulation()
     std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
     source = VectorXd::Zero(V.rows());
     phi    = VectorXd::Zero(V.rows());
+
+    double volume = computeVolume();
+    std::cout << "vol: " << volume << std::endl;
+    Vector3d cm = computeCenterOfMass(volume);
+    std::cout << "{CM: " << cm << std::endl;
+    for (int i = 0; i < V.rows(); i++)
+        V.row(i) -= cm;
 }
 
 bool HeatHook::simulateOneStep()
 {
-    //V += mcf_dt * Vdot;
-    //std::cout << std::sqrt(Morig.diagonal().prod() * 1./M.diagonal().prod()) << std::endl;
-    //Vdot = -std::sqrt(Morig.diagonal().prod() * 1./M.diagonal().prod()) * L * V;
 
-    SimplicialLDLT<SparseMatrix<double>> solver;
-    double prefactor = 1; // std::sqrt(Morig.diagonal().cwiseQuotient(M.diagonal()).prod());
-    //std::cout << Morig.diagonal() << std::endl;
-    std::cout << prefactor << std::endl;
-    solver.compute(M - prefactor*mcf_dt*L);
-    //V = solver.solve(M * V);
-    //V /= std::sqrt(M.diagonal().sum()); // rescale
-    igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
-    // igl::cotmatrix(V, F, L);
+    if (false) // curvature flow 
+    {
+        SimplicialLDLT<SparseMatrix<double>> solver;
+        solver.compute(M - mcf_dt*L);
+        V = solver.solve(M * V);
+
+        // normalize area
+        V /= std::sqrt(M.diagonal().sum()); 
+
+        igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
+
+        if (false) {} // if non-conformal, update the cotan matrix
+
+        // account for new c.o.m
+        double volume = computeVolume();
+        Vector3d cm = computeCenterOfMass(volume);
+        for (int i = 0; i < V.rows(); i++)
+            V.row(i) -= cm;
+    }
+
+    if (true) // heat flow
+    {
+        VectorXd u = VectorXd(V.rows());
+        SparseMatrix<double> A = M - mcf_dt*L;
+        SimplicialLDLT<SparseMatrix<double>> solver;
+        solver.compute(A);
+        u = solver.solve(M*source);
+        phi = u;
+        source = u;
+    }
 
     if (clickedVertex != -1 && clickedVertex != prevClicked)
     {
-        // Update params
-        Solver::updateIters(solverIters);
-        Solver::updateTolerance(solverTol);
-
-        source[clickedVertex] = 1.0;
-        std::cout << "clicked: " << clickedVertex << std::endl;
-        int nfaces = F.rows();
-        MatrixXd ugrad(nfaces, 3);
-        integrateHeat(ugrad);
-        solveDistance(ugrad);
-        prevClicked = clickedVertex;
+        if (false) // calc geodesics is checked 
+        {
+            // Update params
+            Solver::updateIters(solverIters);
+            Solver::updateTolerance(solverTol);
+            source[clickedVertex] = 1.0;
+            std::cout << "clicked: " << clickedVertex << std::endl;
+            int nfaces = F.rows();
+            MatrixXd ugrad(nfaces, 3);
+            integrateHeat(ugrad);
+            solveDistance(ugrad);
+            prevClicked = clickedVertex;
+        } else if (true) { // show heat flow
+            std::cout << "clicked: " << clickedVertex << std::endl;
+            source[clickedVertex] = 1.0;
+            prevClicked = clickedVertex;
+        }
     }
     return false;
 }

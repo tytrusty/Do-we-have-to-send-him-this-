@@ -6,6 +6,7 @@
 #include <igl/isolines.h>
 #include <igl/edges.h>
 #include <igl/components.h>
+#include <igl/colormap.h>
 #include <Eigen/Core>
 
 typedef std::tuple<int, int> Edge;
@@ -49,9 +50,10 @@ public:
         igl::isolines(V, F, phi, 30, isoV, isoE);
 
         viewer.data().clear();
-        //viewer.data().set_mesh(renderV, renderF);
-        viewer.data().set_mesh(V, F);
-        igl::jet(phi, true, C);
+        viewer.data().set_mesh(renderV, renderF);
+        //viewer.data().set_mesh(V, F);
+        // igl::jet(phi, true, C);
+        igl::colormap(igl::COLOR_MAP_TYPE_PLASMA, phi, false, C);
         viewer.data().set_colors(C);
         viewer.data().set_edges(isoV, isoE, Eigen::RowVector3d(0.,0.,0.));
 
@@ -59,11 +61,13 @@ public:
 
     virtual bool mouseClicked(igl::opengl::glfw::Viewer &viewer, int button);
     virtual bool mouseReleased(igl::opengl::glfw::Viewer &viewer,  int button);
-    // virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer,  int button);
+    virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer,  int button);
     
 private:
     void integrateHeat(Eigen::MatrixXd&);
     void solveDistance(const Eigen::MatrixXd& ugrad);
+    double computeVolume();
+    Eigen::Vector3d computeCenterOfMass(double volume_);
 
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
