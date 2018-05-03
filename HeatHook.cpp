@@ -320,7 +320,6 @@ void HeatHook::initSimulation()
 
     }
 
-    Cluster cluster(F, 4);
     V *= 10.0; 
     // V /= 10.0;
     prevClicked = -1;
@@ -340,15 +339,25 @@ void HeatHook::initSimulation()
     double volume = computeVolume();
     std::cout << "vol: " << volume << std::endl;
     Vector3d cm = computeCenterOfMass(volume);
-    std::cout << "{CM: " << cm << std::endl;
+    std::cout << "CM: " << cm << std::endl;
     for (int i = 0; i < V.rows(); i++)
         V.row(i) -= cm;
+
+    Cluster cluster(F, 69, V.rows());
+    cluster.BFS();
+    int n = 0;
+    for(unordered_set<int> set : cluster.cluster_map_true) {
+        for (int i : set) {
+            phi[i] = n/4.0;
+        }
+        ++n;
+    }
 }
 
 bool HeatHook::simulateOneStep()
 {
 
-    if (false) // curvature flow 
+    if (true) // curvature flow 
     {
         SimplicialLDLT<SparseMatrix<double>> solver;
         solver.compute(M - mcf_dt*L);
@@ -368,7 +377,7 @@ bool HeatHook::simulateOneStep()
             V.row(i) -= cm;
     }
 
-    if (true) // heat flow
+    if (false) // heat flow
     {
         VectorXd u = VectorXd(V.rows());
         SparseMatrix<double> A = M - mcf_dt*L;
