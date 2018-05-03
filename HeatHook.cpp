@@ -7,7 +7,7 @@
 #include "Solver.h"
 #include <string>
 #include <igl/readPLY.h>
-#include <boundingmesh.h>
+#include "Cluster.h"
 using namespace Eigen;
 
 HeatHook::HeatHook() : PhysicsHook() 
@@ -320,7 +320,7 @@ void HeatHook::initSimulation()
 
     }
 
-    std::shared_ptr<boundingmesh::Mesh> mesh = boundingmesh::loadMesh(meshfname);
+    Cluster cluster(F, 4);
     V *= 10.0; 
     // V /= 10.0;
     prevClicked = -1;

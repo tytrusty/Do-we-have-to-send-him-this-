@@ -1,1 +1,0 @@
-/usr/bin/c++   -std=c++0x  -rdynamic CMakeFiles/bounding-convex-decomposition.dir/bounding-convex-decomposition-cli.cpp.o  -o ../../bounding-convex-decomposition ../../libboundingmesh.a -lCGAL -lboost_thread -lboost_system -lboost_chrono -lboost_date_time -lboost_atomic -lpthread -lgmp 

@@ -1,1 +1,0 @@
-/usr/bin/c++   -std=c++0x  -rdynamic CMakeFiles/boundingmesh-bin.dir/boundingmesh-cli.cpp.o  -o ../../boundingmesh ../../libboundingmesh.a -lCGAL -lboost_thread -lboost_system -lboost_chrono -lboost_date_time -lboost_atomic -lpthread -lgmp 

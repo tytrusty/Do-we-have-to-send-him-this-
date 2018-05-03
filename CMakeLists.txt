@@ -11,20 +11,6 @@ if (OPENMP_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
-find_package(CGAL)
-if(CGAL_FOUND)
-    add_definitions(-DCGAL_AVAILABLE -DCGAL_DISABLE_ROUNDING_MATH_CHECK)
-    include_directories(${CGAL_INCLUDE_DIRS})
-    link_directories(${CGAL_LIBRARIES_DIR})
-    message(STATUS ${CGAL_INCLUDE_DIRS})
-    message(STATUS ${CGAL_LIBRARIES_DIR})
-    set(CGAL_LIBRARIES "CGAL;CGAL_Core;gmp;mpfr") # CGAL
-    set(HAVE_CGAL True)
-else()
-    set(HAVE_CGAL False)
-    message(STATUS "Configure package without CGAL!")
-endif()
-
 
 # libigl
 option(LIBIGL_USE_STATIC_LIBRARY "Use libigl as static library" OFF)
@@ -48,14 +34,10 @@ option(LIBIGL_WITH_XML               "Use XML"            OFF)
 
 find_package(LIBIGL REQUIRED QUIET)
 
-include_directories(${PROJECT_SOURCE_DIR}/lib/bounding-mesh/src/boundingmesh )
-
 # Add your project files
 file(GLOB SRCFILES *.cpp)
-file(GLOB SRCBOUND ${PROJECT_SOURCE_DIR}/lib/bounding-mesh/src/boundingmesh/*.cpp )
-add_executable(${PROJECT_NAME}_bin ${SRCFILES} ${SRCBOUND})
+add_executable(${PROJECT_NAME}_bin ${SRCFILES})
 MESSAGE(${CMAKE_SOURCE_DIR})
-target_include_directories(${PROJECT_NAME}_bin PUBLIC "" ${CGAL_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME}_bin igl::core igl::opengl_glfw igl::opengl_glfw_imgui ${CGAL_LIBRARIES})
+target_link_libraries(${PROJECT_NAME}_bin igl::core igl::opengl_glfw igl::opengl_glfw_imgui )
 
 
