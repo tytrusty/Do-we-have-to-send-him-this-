@@ -7,7 +7,7 @@
 #include "Solver.h"
 #include <string>
 #include <igl/readPLY.h>
-// #include <boundingmesh.h>
+#include <boundingmesh.h>
 using namespace Eigen;
 
 HeatHook::HeatHook() : PhysicsHook() 
@@ -15,7 +15,7 @@ HeatHook::HeatHook() : PhysicsHook()
     clickedVertex = -1;
     dt = 1e0;
     mcf_dt = 1e-5;
-    meshFile_ = "rect-coarse.obj";
+    meshFile_ = "bunny.obj";
     solverIters = 40;
     solverTol = 1e-7;
 }
@@ -319,6 +319,8 @@ void HeatHook::initSimulation()
         std::cout << "Done reading PLY" << std::endl;
 
     }
+
+    std::shared_ptr<boundingmesh::Mesh> mesh = boundingmesh::loadMesh(meshfname);
     V *= 10.0; 
     // V /= 10.0;
     prevClicked = -1;
