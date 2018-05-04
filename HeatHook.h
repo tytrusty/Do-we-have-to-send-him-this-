@@ -63,6 +63,7 @@ public:
     virtual bool mouseMoved(igl::opengl::glfw::Viewer &viewer,  int button);
     
 private:
+    void buildCotanLaplacian(Eigen::SparseMatrix<double>&);
     void integrateHeat(Eigen::MatrixXd&);
     void solveDistance(const Eigen::MatrixXd& ugrad);
     double computeVolume();
@@ -82,7 +83,10 @@ private:
     Eigen::Vector3d curPos; // the current position of the mouse cursor in 3D
 
     float dt;
-    double mcf_dt;
+    bool mass_fixed;
+    bool cotan_fixed;
+    float mcf_dt;
+    float heat_dt;
     int solverIters;
     float solverTol;
 

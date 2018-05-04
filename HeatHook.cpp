@@ -14,7 +14,10 @@ HeatHook::HeatHook() : PhysicsHook()
 {
     clickedVertex = -1;
     dt = 1e0;
-    mcf_dt = 1e-5;
+    heat_dt = 1e-5;
+    mcf_dt = 5e-4;
+    mass_fixed = false;
+    cotan_fixed = true;
     meshFile_ = "bunny.obj";
     solverIters = 40;
     solverTol = 1e-7;
@@ -79,6 +82,10 @@ void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 	}
 	if (ImGui::CollapsingHeader("Simulation Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
+        ImGui::InputFloat("MCF timestep", &mcf_dt, 0, 0, 5);
+        ImGui::Checkbox("Mass fixed", &mass_fixed);
+        ImGui::Checkbox("Cotan fixed", &cotan_fixed);
+        ImGui::InputFloat("Heat flow timestep", &heat_dt, 0, 0, 5);
         ImGui::InputFloat("Timestep", &dt, 0, 0, 3);
         ImGui::InputInt("Solver Iters", &solverIters);
         ImGui::InputFloat("Solver Tolerance", &solverTol, 0, 0, 12);
@@ -226,6 +233,31 @@ void HeatHook::tick()
     mouseMutex.unlock();
 }
 
+void HeatHook::buildCotanLaplacian(Eigen::SparseMatrix<double>& L_)
+{
+    std::cout << "L size " << L_.size() << std::endl;
+    L_.setZero();
+
+    std::vector<Triplet<double>> trips;
+    int nfaces = F.rows();
+    for (int i = 0; i < nfaces; i++) {
+        Vector3i face = F.row(i);
+        for (int j = 0; j < 3; j++) {
+            Vector3d e1 = V.row(face[(j+1)%3]) - V.row(face[j]);
+            Vector3d e2 = V.row(face[(j+2)%3]) - V.row(face[j]);
+            Vector3d e3 = e2 - e1;
+
+            double cot1 = e2.dot(e3)/(-e2).cross(-e3).norm();
+            double cot2 = (-e1).dot(e3)/(e1).cross(-e3).norm();
+
+            trips.push_back(Triplet<double>(face[j], face[(j+1)%3], (cot1 + cot2)));
+            trips.push_back(Triplet<double>(face[(j+1)%3], face[j], (cot1 + cot2)));
+            trips.push_back(Triplet<double>(face[j], face[j], -(cot1 + cot2)));
+            trips.push_back(Triplet<double>(face[(j+1)%3], face[(j+1)%3], -(cot1 + cot2)));
+        }
+    }
+    L_.setFromTriplets(trips.begin(), trips.end());
+}
 void HeatHook::integrateHeat(MatrixXd& ugrad)
 {
     double start;
@@ -324,13 +356,16 @@ void HeatHook::initSimulation()
     // V /= 10.0;
     prevClicked = -1;
 
+    L = SparseMatrix<double>(V.rows(), V.rows());
     double start;
     start = omp_get_wtime();
-    igl::cotmatrix(V, F, L);
+    //igl::cotmatrix(V, F, L);
+    buildCotanLaplacian(L);
+
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
     V /= std::sqrt(Morig.diagonal().sum());
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
-    M = Morig;
+    igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
     Vdot = MatrixXd::Zero(V.rows(), V.cols());
     std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
     source = VectorXd::Zero(V.rows());
@@ -343,15 +378,15 @@ void HeatHook::initSimulation()
     for (int i = 0; i < V.rows(); i++)
         V.row(i) -= cm;
 
-    Cluster cluster(F, 69, V.rows());
-    cluster.BFS();
-    int n = 0;
-    for(unordered_set<int> set : cluster.cluster_map_true) {
-        for (int i : set) {
-            phi[i] = n/4.0;
-        }
-        ++n;
-    }
+//    Cluster cluster(F, 69, V.rows());
+//    cluster.BFS();
+//    int n = 0;
+//    for(unordered_set<int> set : cluster.cluster_map_true) {
+//        for (int i : set) {
+//            phi[i] = n/4.0;
+//        }
+//        ++n;
+//    }
 }
 
 bool HeatHook::simulateOneStep()
@@ -360,13 +395,24 @@ bool HeatHook::simulateOneStep()
     if (true) // curvature flow 
     {
         SimplicialLDLT<SparseMatrix<double>> solver;
-        solver.compute(M - mcf_dt*L);
-        V = solver.solve(M * V);
+        SparseMatrix<double>& useM = mass_fixed ? M : Morig;
+        solver.compute(useM - mcf_dt*L);
+        V = solver.solve(useM * V);
 
         // normalize area
-        V /= std::sqrt(M.diagonal().sum()); 
 
-        igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
+        if (!mass_fixed) {
+            igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
+            V /= std::sqrt(Morig.diagonal().sum());
+        }
+        else {
+            igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
+            V /= std::sqrt(M.diagonal().sum());
+        }
+
+        if (!cotan_fixed)
+            buildCotanLaplacian(L);
+            //igl::cotmatrix(V, F, L);
 
         if (false) {} // if non-conformal, update the cotan matrix
 
@@ -380,7 +426,7 @@ bool HeatHook::simulateOneStep()
     if (false) // heat flow
     {
         VectorXd u = VectorXd(V.rows());
-        SparseMatrix<double> A = M - mcf_dt*L;
+        SparseMatrix<double> A = M - heat_dt*L;
         SimplicialLDLT<SparseMatrix<double>> solver;
         solver.compute(A);
         u = solver.solve(M*source);
@@ -396,14 +442,14 @@ bool HeatHook::simulateOneStep()
             Solver::updateIters(solverIters);
             Solver::updateTolerance(solverTol);
             source[clickedVertex] = 1.0;
-            std::cout << "clicked: " << clickedVertex << std::endl;
+            //std::cout << "clicked: " << clickedVertex << std::endl;
             int nfaces = F.rows();
             MatrixXd ugrad(nfaces, 3);
             integrateHeat(ugrad);
             solveDistance(ugrad);
             prevClicked = clickedVertex;
         } else if (true) { // show heat flow
-            std::cout << "clicked: " << clickedVertex << std::endl;
+            //std::cout << "clicked: " << clickedVertex << std::endl;
             source[clickedVertex] = 1.0;
             prevClicked = clickedVertex;
         }
