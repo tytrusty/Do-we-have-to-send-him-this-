@@ -85,10 +85,10 @@ private:
     Eigen::Vector3d curPos; // the current position of the mouse cursor in 3D
     bool mouseDown;
 
-    float dt;
     bool mass_fixed;
     bool cotan_fixed;
     bool explicit_mcf;
+    float geodesic_dt;
     float mcf_dt;
     float heat_dt;
     int solverIters;

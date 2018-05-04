@@ -13,7 +13,7 @@ using namespace Eigen;
 HeatHook::HeatHook() : PhysicsHook() 
 {
     clickedVertex = -1;
-    dt = 1e0;
+    geodesic_dt = 1e0;
     heat_dt = 1e-5;
     mcf_dt = 5e-4;
     mass_fixed = false;
@@ -25,7 +25,7 @@ HeatHook::HeatHook() : PhysicsHook()
 
     enable_geodesics = false;
     enable_heat = false;
-    enable_mcf  = false;
+    enable_mcf  = true;
     normalize_color = false;
     render_color = 1;
     enable_iso  = true;
@@ -93,7 +93,6 @@ void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         ImGui::Checkbox("Enable heat flow", &enable_heat);
         ImGui::Checkbox("Enable MCF", &enable_mcf);
         ImGui::Checkbox("Enable heat geodesics", &enable_geodesics);
-        ImGui::InputFloat("Timestep", &dt, 0, 0, 3);
         ImGui::InputInt("Solver Iters", &solverIters);
         ImGui::InputFloat("Solver Tolerance", &solverTol, 0, 0, 12);
 	}
@@ -106,7 +105,8 @@ void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 	}
 	if (ImGui::CollapsingHeader("Heat Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::InputFloat("Heat flow timestep", &heat_dt, 0, 0, 7);
+        ImGui::InputFloat("geodesic timestep", &geodesic_dt, 0, 0, 5);
+        ImGui::InputFloat("flow timestep", &heat_dt, 0, 0, 7);
 	}
 
     const char* listbox_items[] = { "Inferno", "Jet", "Magma", "Parula", "Plasma", "Viridis"};
@@ -293,7 +293,7 @@ void HeatHook::integrateHeat(MatrixXd& ugrad)
 
     start = omp_get_wtime();
     // solve heat flow
-    SparseMatrix<double> A = M - dt*L;
+    SparseMatrix<double> A = M - geodesic_dt*L;
     ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
     cg.compute(A);
     u = cg.solve(source);
@@ -401,6 +401,10 @@ void HeatHook::initSimulation()
     std::cout << "CM: " << cm << std::endl;
     for (int i = 0; i < V.rows(); i++)
         V.row(i) -= cm;
+
+    geodesic_dt = 5.0*M.diagonal().sum()/F.rows();
+    std::cout << "geodesic_dt: " << geodesic_dt << std::endl;
+
 //    Cluster cluster(F, 69, V.rows());
 //    cluster.BFS();
 //    int n = 0;
