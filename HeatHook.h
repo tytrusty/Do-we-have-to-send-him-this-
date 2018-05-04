@@ -45,16 +45,20 @@ public:
     
     virtual void renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
     {
-        Eigen::MatrixXd isoV;
-        Eigen::MatrixXi isoE;
-        igl::isolines(V, F, phi, 30, isoV, isoE);
 
         viewer.data().clear();
         viewer.data().set_mesh(renderV, renderF);
         //viewer.data().set_mesh(V, F);
-        igl::colormap(igl::COLOR_MAP_TYPE_JET, phi, false, C);
+        
+        igl::colormap(igl::ColorMapType(render_color), phi, normalize_color, C);
         viewer.data().set_colors(C);
-        // viewer.data().set_edges(isoV, isoE, Eigen::RowVector3d(0.,0.,0.));
+        if (enable_iso) 
+        {
+            Eigen::MatrixXd isoV;
+            Eigen::MatrixXi isoE;
+            igl::isolines(renderV, renderF, phi, 30, isoV, isoE);
+            viewer.data().set_edges(isoV, isoE, Eigen::RowVector3d(0.,0.,0.));
+        }
 
     }
 
@@ -73,14 +77,13 @@ private:
     Eigen::MatrixXi F;
     Eigen::VectorXd phi;
     std::string meshFile_;
-
-
     std::mutex mouseMutex;
     std::vector<MouseEvent> mouseEvents;
     int clickedVertex; // the currently selected vertex (-1 if no vertex)
     int prevClicked;
     double clickedz;
     Eigen::Vector3d curPos; // the current position of the mouse cursor in 3D
+    bool mouseDown;
 
     float dt;
     bool mass_fixed;
@@ -90,6 +93,14 @@ private:
     float heat_dt;
     int solverIters;
     float solverTol;
+    bool enable_geodesics;
+    bool enable_heat;
+    bool enable_mcf;
+
+    bool enable_iso;
+    bool normalize_color;
+    int render_color;
+
 
     Eigen::SparseMatrix<double> L;
     Eigen::SparseMatrix<double> M;

@@ -19,9 +19,16 @@ HeatHook::HeatHook() : PhysicsHook()
     mass_fixed = false;
     cotan_fixed = true;
     explicit_mcf = false;
-    meshFile_ = "cube.obj";
+    meshFile_ = "bunny.obj";
     solverIters = 40;
     solverTol = 1e-7;
+
+    enable_geodesics = false;
+    enable_heat = false;
+    enable_mcf  = false;
+    normalize_color = false;
+    render_color = 1;
+    enable_iso  = true;
 }
 
 double HeatHook::computeVolume() {
@@ -83,14 +90,30 @@ void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
 	}
 	if (ImGui::CollapsingHeader("Simulation Options", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::InputFloat("MCF timestep", &mcf_dt, 0, 0, 5);
-        ImGui::Checkbox("Mass fixed", &mass_fixed);
-        ImGui::Checkbox("Cotan fixed", &cotan_fixed);
-        ImGui::Checkbox("MCF is explicit", &explicit_mcf);
-        ImGui::InputFloat("Heat flow timestep", &heat_dt, 0, 0, 5);
+        ImGui::Checkbox("Enable heat flow", &enable_heat);
+        ImGui::Checkbox("Enable MCF", &enable_mcf);
+        ImGui::Checkbox("Enable heat geodesics", &enable_geodesics);
         ImGui::InputFloat("Timestep", &dt, 0, 0, 3);
         ImGui::InputInt("Solver Iters", &solverIters);
         ImGui::InputFloat("Solver Tolerance", &solverTol, 0, 0, 12);
+	}
+	if (ImGui::CollapsingHeader("MCF Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::InputFloat("MCF timestep", &mcf_dt, 0, 0, 7);
+        ImGui::Checkbox("Mass fixed", &mass_fixed);
+        ImGui::Checkbox("Cotan fixed", &cotan_fixed);
+        ImGui::Checkbox("MCF is explicit", &explicit_mcf);
+	}
+	if (ImGui::CollapsingHeader("Heat Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::InputFloat("Heat flow timestep", &heat_dt, 0, 0, 7);
+	}
+
+    const char* listbox_items[] = { "Inferno", "Jet", "Magma", "Parula", "Plasma", "Viridis"};
+	if (ImGui::CollapsingHeader("Render Options", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::ListBox("Render color", &render_color, listbox_items, IM_ARRAYSIZE(listbox_items), 4);
+        ImGui::Checkbox("Isocontour", &enable_iso);
 	}
 }
 
@@ -109,10 +132,10 @@ bool HeatHook::mouseClicked(igl::opengl::glfw::Viewer &viewer, int button)
         viewer.core.proj, viewer.core.viewport, V, F, fid, bc))
     {
         int bestvert = -1;
-        double bestcoord = 2.0;
+        double bestcoord = 0.0;
         for (int j = 0; j < 3; j++)
         {
-            if (bc[j] < bestcoord)
+            if (bc[j] > bestcoord)
             {
                 bestcoord = bc[j];
                 bestvert = j;
@@ -175,16 +198,16 @@ bool HeatHook::mouseMoved(igl::opengl::glfw::Viewer &viewer, int button)
         viewer.core.proj, viewer.core.viewport, V, F, fid, bc))
     {
         int bestvert = -1;
-        double bestcoord = 2.0;
+        double bestcoord = 0.0;
         for (int j = 0; j < 3; j++)
         {
-            if (bc[j] < bestcoord)
+            if (bc[j] > bestcoord)
             {
                 bestcoord = bc[j];
                 bestvert = j;
             }
         }
-        me.type = MouseEvent::ME_CLICKED;
+        // me.type = MouseEvent::ME_CLICKED;
         me.vertex = F(fid, bestvert);        
         
         Eigen::Vector3f proj;
@@ -221,14 +244,20 @@ void HeatHook::tick()
         {            
             curPos = me.pos;
             clickedVertex = me.vertex;         
+            mouseDown = true;
         }
         if (me.type == MouseEvent::ME_RELEASED)
         {
             clickedVertex = -1;
+            mouseDown = false;
         }
         if (me.type == MouseEvent::ME_DRAGGED)
         {
-            curPos = me.pos;
+            if (mouseDown)
+            {
+                curPos = me.pos;
+                clickedVertex = me.vertex;         
+            }
         }
     }
     mouseEvents.clear();
@@ -237,9 +266,6 @@ void HeatHook::tick()
 
 void HeatHook::buildCotanLaplacian(Eigen::SparseMatrix<double>& L_)
 {
-    std::cout << "L size " << L_.size() << std::endl;
-//    igl::cotmatrix(V, F, L_);
-//    std::cout << "igl\n" << L_ << std::endl << std::endl;
     L_.setZero();
     std::vector<Triplet<double>> trips;
     int nfaces = F.rows();
@@ -251,16 +277,14 @@ void HeatHook::buildCotanLaplacian(Eigen::SparseMatrix<double>& L_)
             Vector3d e3 = e2 - e1;
 
             double cot1 = e2.dot(e3)/(-e2).cross(-e3).norm();
-            double cot2 = (-e1).dot(e3)/(e1).cross(-e3).norm();
 
-            trips.push_back(Triplet<double>(face[j], face[(j+1)%3], .5*(true ? cot1 : (cot1 + cot2))));
-            trips.push_back(Triplet<double>(face[(j+1)%3], face[j], .5*(true ? cot1 : (cot1 + cot2))));
-            trips.push_back(Triplet<double>(face[j], face[j], -.5*(true? cot1 : (cot1 + cot2))));
-            trips.push_back(Triplet<double>(face[(j+1)%3], face[(j+1)%3], -.5*(true? cot1 : (cot1 + cot2))));
+            trips.push_back(Triplet<double>(face[j], face[(j+1)%3], .5*cot1));
+            trips.push_back(Triplet<double>(face[(j+1)%3], face[j], .5*cot1));
+            trips.push_back(Triplet<double>(face[j], face[j], -.5*cot1));
+            trips.push_back(Triplet<double>(face[(j+1)%3], face[(j+1)%3], -.5*cot1));
         }
     }
     L_.setFromTriplets(trips.begin(), trips.end());
-//    std::cout << L_ << std::endl;
 }
 void HeatHook::integrateHeat(MatrixXd& ugrad)
 {
@@ -318,23 +342,22 @@ void HeatHook::solveDistance(const MatrixXd& ugrad)
     std::cout << "div computation time (s): " << omp_get_wtime() - start << std::endl;
     // Solve for distance
     start = omp_get_wtime();
-    Solver::gauss_seidel(L, div, phi);
-    // Finds a different solution ???
-    //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
-    //cg.compute(L);
-    //phi = cg.solve(div);
+    // Solver::gauss_seidel(L, div, phi);
+    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    cg.compute(L);
+    phi = -cg.solve(div);
     std::cout << "solve dist time (s): " << omp_get_wtime() - start << std::endl;
 }
 
 
 void HeatHook::initSimulation()
 {
-    Eigen::initParallel();
-    std::cout << "Num threads: " << Eigen::nbThreads() << std::endl;
-    #pragma omp parallel
-    {
-        std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
-    }
+    //Eigen::initParallel();
+    //std::cout << "Num threads: " << Eigen::nbThreads() << std::endl;
+    //#pragma omp parallel
+    //{
+    //    std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
+    //}
 
 	std::string meshfname = std::string("../meshes/") + meshFile_;
     std::string ext = meshFile_.substr(meshFile_.find_last_of(".")+1);
@@ -357,13 +380,11 @@ void HeatHook::initSimulation()
     }
 
     V *= 10.0; 
-    // V /= 10.0;
     prevClicked = -1;
 
     L = SparseMatrix<double>(V.rows(), V.rows());
     double start;
     start = omp_get_wtime();
-    //igl::cotmatrix(V, F, L);
     buildCotanLaplacian(L);
 
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
@@ -380,7 +401,6 @@ void HeatHook::initSimulation()
     std::cout << "CM: " << cm << std::endl;
     for (int i = 0; i < V.rows(); i++)
         V.row(i) -= cm;
-
 //    Cluster cluster(F, 69, V.rows());
 //    cluster.BFS();
 //    int n = 0;
@@ -395,7 +415,7 @@ void HeatHook::initSimulation()
 bool HeatHook::simulateOneStep()
 {
 
-    if (true) // curvature flow 
+    if (enable_mcf) // curvature flow 
     {
         SparseMatrix<double>& useM = mass_fixed ? M : Morig;
         if (explicit_mcf) {
@@ -426,9 +446,6 @@ bool HeatHook::simulateOneStep()
 
         if (!cotan_fixed)
             buildCotanLaplacian(L);
-            //igl::cotmatrix(V, F, L);
-
-        if (false) {} // if non-conformal, update the cotan matrix
 
         // account for new c.o.m
         double volume = computeVolume();
@@ -437,8 +454,9 @@ bool HeatHook::simulateOneStep()
             V.row(i) -= cm;
     }
 
-    if (false) // heat flow
+    if (enable_heat) // heat flow
     {
+        normalize_color = false;
         VectorXd u = VectorXd(V.rows());
         SparseMatrix<double> A = M - heat_dt*L;
         SimplicialLDLT<SparseMatrix<double>> solver;
@@ -446,11 +464,16 @@ bool HeatHook::simulateOneStep()
         u = solver.solve(M*source);
         phi = u;
         source = u;
+
+        if (clickedVertex != -1) {
+            source[clickedVertex] = 1.0;
+        }
     }
 
-    if (clickedVertex != -1 && clickedVertex != prevClicked)
+    if (enable_geodesics) // calc geodesics is checked 
     {
-        if (false) // calc geodesics is checked 
+        normalize_color = true;
+        if (clickedVertex != -1 && clickedVertex != prevClicked)
         {
             // Update params
             Solver::updateIters(solverIters);
@@ -462,11 +485,7 @@ bool HeatHook::simulateOneStep()
             integrateHeat(ugrad);
             solveDistance(ugrad);
             prevClicked = clickedVertex;
-        } else if (true) { // show heat flow
-            //std::cout << "clicked: " << clickedVertex << std::endl;
-            source[clickedVertex] = 1.0;
-            prevClicked = clickedVertex;
-        }
+        }     
     }
     return false;
 }
