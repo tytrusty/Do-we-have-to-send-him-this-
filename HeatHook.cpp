@@ -18,7 +18,8 @@ HeatHook::HeatHook() : PhysicsHook()
     mcf_dt = 5e-4;
     mass_fixed = false;
     cotan_fixed = true;
-    meshFile_ = "bunny.obj";
+    explicit_mcf = false;
+    meshFile_ = "cube.obj";
     solverIters = 40;
     solverTol = 1e-7;
 }
@@ -85,6 +86,7 @@ void HeatHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu)
         ImGui::InputFloat("MCF timestep", &mcf_dt, 0, 0, 5);
         ImGui::Checkbox("Mass fixed", &mass_fixed);
         ImGui::Checkbox("Cotan fixed", &cotan_fixed);
+        ImGui::Checkbox("MCF is explicit", &explicit_mcf);
         ImGui::InputFloat("Heat flow timestep", &heat_dt, 0, 0, 5);
         ImGui::InputFloat("Timestep", &dt, 0, 0, 3);
         ImGui::InputInt("Solver Iters", &solverIters);
@@ -236,8 +238,9 @@ void HeatHook::tick()
 void HeatHook::buildCotanLaplacian(Eigen::SparseMatrix<double>& L_)
 {
     std::cout << "L size " << L_.size() << std::endl;
+//    igl::cotmatrix(V, F, L_);
+//    std::cout << "igl\n" << L_ << std::endl << std::endl;
     L_.setZero();
-
     std::vector<Triplet<double>> trips;
     int nfaces = F.rows();
     for (int i = 0; i < nfaces; i++) {
@@ -250,13 +253,14 @@ void HeatHook::buildCotanLaplacian(Eigen::SparseMatrix<double>& L_)
             double cot1 = e2.dot(e3)/(-e2).cross(-e3).norm();
             double cot2 = (-e1).dot(e3)/(e1).cross(-e3).norm();
 
-            trips.push_back(Triplet<double>(face[j], face[(j+1)%3], (cot1 + cot2)));
-            trips.push_back(Triplet<double>(face[(j+1)%3], face[j], (cot1 + cot2)));
-            trips.push_back(Triplet<double>(face[j], face[j], -(cot1 + cot2)));
-            trips.push_back(Triplet<double>(face[(j+1)%3], face[(j+1)%3], -(cot1 + cot2)));
+            trips.push_back(Triplet<double>(face[j], face[(j+1)%3], .5*(true ? cot1 : (cot1 + cot2))));
+            trips.push_back(Triplet<double>(face[(j+1)%3], face[j], .5*(true ? cot1 : (cot1 + cot2))));
+            trips.push_back(Triplet<double>(face[j], face[j], -.5*(true? cot1 : (cot1 + cot2))));
+            trips.push_back(Triplet<double>(face[(j+1)%3], face[(j+1)%3], -.5*(true? cot1 : (cot1 + cot2))));
         }
     }
     L_.setFromTriplets(trips.begin(), trips.end());
+//    std::cout << L_ << std::endl;
 }
 void HeatHook::integrateHeat(MatrixXd& ugrad)
 {
@@ -366,7 +370,6 @@ void HeatHook::initSimulation()
     V /= std::sqrt(Morig.diagonal().sum());
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
-    Vdot = MatrixXd::Zero(V.rows(), V.cols());
     std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
     source = VectorXd::Zero(V.rows());
     phi    = VectorXd::Zero(V.rows());
@@ -394,11 +397,22 @@ bool HeatHook::simulateOneStep()
 
     if (true) // curvature flow 
     {
-        SimplicialLDLT<SparseMatrix<double>> solver;
         SparseMatrix<double>& useM = mass_fixed ? M : Morig;
-        solver.compute(useM - mcf_dt*L);
-        V = solver.solve(useM * V);
-
+        if (explicit_mcf) {
+            SparseMatrix<double> Minv(V.rows(), V.rows());
+            std::vector<Triplet<double>> trips;
+            VectorXd diag = M.diagonal().cwiseQuotient(M.diagonal().cwiseProduct(M.diagonal()));
+            int nverts = V.rows();
+            for (int i = 0; i < nverts; i++) {
+                trips.push_back(Triplet<double>(i, i, diag[i]));
+            }
+            Minv.setFromTriplets(trips.begin(), trips.end());
+            V +=  mcf_dt * Minv * L  * V;
+        } else {
+            SimplicialLDLT<SparseMatrix<double>> solver;
+            solver.compute(useM - mcf_dt*L);
+            V = solver.solve(useM * V);
+        }
         // normalize area
 
         if (!mass_fixed) {

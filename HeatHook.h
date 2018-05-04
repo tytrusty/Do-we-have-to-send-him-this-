@@ -52,7 +52,7 @@ public:
         viewer.data().clear();
         viewer.data().set_mesh(renderV, renderF);
         //viewer.data().set_mesh(V, F);
-        igl::colormap(igl::COLOR_MAP_TYPE_MAGMA, phi, false, C);
+        igl::colormap(igl::COLOR_MAP_TYPE_JET, phi, false, C);
         viewer.data().set_colors(C);
         // viewer.data().set_edges(isoV, isoE, Eigen::RowVector3d(0.,0.,0.));
 
@@ -85,6 +85,7 @@ private:
     float dt;
     bool mass_fixed;
     bool cotan_fixed;
+    bool explicit_mcf;
     float mcf_dt;
     float heat_dt;
     int solverIters;
