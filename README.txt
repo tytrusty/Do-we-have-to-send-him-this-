@@ -48,6 +48,8 @@ mesh to set a source.
 - Render color: color presets for rendering. 
 - isocontour: enables isolines on the surface. Good for demoing the geodesics
 
+EXTRA CREDIT: We both filled out the ECIS for 10 points extra credit. 
+
 ## Dependencies
 
 The only dependencies are stl, eigen, [libigl](libigl.github.io/libigl/) and
