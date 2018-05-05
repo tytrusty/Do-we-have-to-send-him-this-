@@ -56,3 +56,13 @@ the dependencies of the `igl::viewer::Viewer` (glfw and opengl).
 We recommend you to install libigl using git via:
 
     git clone --recursive https://github.com/libigl/libigl.git
+
+## References
+Crane, K., Weischedel, C., and Wardetzky, M. 2013. Geodesics in heat: A
+new approach to computing distance based on heat flow. ACM Trans. Graph.
+32, 5. Article 152 (September 2013), 11 pages.
+DOI: [http://dx.doi.org/10.1145/2516971.2516977](http://dx.doi.org/10.1145/2516971.2516977).
+
+Kazhdan et al. 2012. Can Mean-Curvature Flow Be Made Non-Singular? [http://www.cs.jhu.edu/~misha/MyPapers/SGP12.pdf](http://www.cs.jhu.edu/~misha/MyPapers/SGP12.pdf)
+
+
