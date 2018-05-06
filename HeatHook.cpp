@@ -405,6 +405,9 @@ void HeatHook::initSimulation()
     geodesic_dt = 5.0*M.diagonal().sum()/F.rows();
     std::cout << "geodesic_dt: " << geodesic_dt << std::endl;
 
+    source[0] = 1.0;
+    Solver::multigrid(L, source, phi, 5);
+
 //    Cluster cluster(F, 69, V.rows());
 //    cluster.BFS();
 //    int n = 0;
