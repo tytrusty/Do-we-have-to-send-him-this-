@@ -19,7 +19,7 @@ HeatHook::HeatHook() : PhysicsHook()
     mass_fixed = false;
     cotan_fixed = true;
     explicit_mcf = false;
-    meshFile_ = "bunny.obj";
+    meshFile_ = "fertility.off";
     solverIters = 40;
     solverTol = 1e-7;
 
@@ -377,7 +377,17 @@ void HeatHook::initSimulation()
         }
         std::cout << "Done reading PLY" << std::endl;
 
+    } else if (ext == "off") {
+        std::cout << "Reading OFF file" << std::endl;
+        if(!igl::readOFF(meshfname, V, F))
+        {
+            std::cerr << "Couldn't read mesh file" << std::endl;
+            exit(-1);
+        }
+        std::cout << "Done reading OFF" << std::endl;
+
     }
+
 
     V *= 10.0; 
     prevClicked = -1;
@@ -405,8 +415,8 @@ void HeatHook::initSimulation()
     geodesic_dt = 5.0*M.diagonal().sum()/F.rows();
     std::cout << "geodesic_dt: " << geodesic_dt << std::endl;
 
-    source[0] = 1.0;
-    Solver::multigrid(L, source, phi, 5);
+    // source[0] = 1.0;
+    // Solver::multigrid(L, source, phi, 5);
 
 //    Cluster cluster(F, 69, V.rows());
 //    cluster.BFS();
@@ -417,10 +427,18 @@ void HeatHook::initSimulation()
 //        }
 //        ++n;
 //    }
+    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
+    solver.setup(V,F);
+    solver.construct_p(V,F,F.rows()/2, V, F);
+    solver.construct_p(V,F,F.rows()/2, V, F);
+    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
 }
 
 bool HeatHook::simulateOneStep()
 {
+    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
+    solver.construct_p(V,F,F.rows()/2, V, F);
+    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
 
     if (enable_mcf) // curvature flow 
     {
@@ -483,8 +501,8 @@ bool HeatHook::simulateOneStep()
         if (clickedVertex != -1 && clickedVertex != prevClicked)
         {
             // Update params
-            Solver::updateIters(solverIters);
-            Solver::updateTolerance(solverTol);
+            //Solver::updateIters(solverIters);
+            //Solver::updateTolerance(solverTol);
             source[clickedVertex] = 1.0;
             //std::cout << "clicked: " << clickedVertex << std::endl;
             int nfaces = F.rows();

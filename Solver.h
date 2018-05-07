@@ -3,12 +3,16 @@
 
 #include <omp.h>
 #include <Eigen/Core>
+#include <igl/edge_flaps.h>
+#include <igl/collapse_edge.h>
+#include <igl/max_faces_stopping_condition.h>
+#include <igl/shortest_edge_and_midpoint.h>
 
 using namespace Eigen;
-using Eigen::internal::BandMatrix;
 
-namespace Solver
+class Solver
 {
+public:
     const int preIters=3, postIters=2, coarseIters=10;
     int iters_ = 400;
     float tolerance = 1e-7;
@@ -31,7 +35,7 @@ namespace Solver
     }
 
     void gauss_seidel(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x,
-            int max_iters = iters_)
+            int max_iters)
     {
         std::cout << "gauss_seidel size(): " << x.size() << std::endl;
         int iters = 0;
@@ -59,62 +63,71 @@ namespace Solver
         std::cout << "iters : " << iters << std::endl;
     }
 
-    void restrict() {}
-    void prolong() {}
-    VectorXd restrict_residual(const SparseMatrix<double>& A, const VectorXd& b, const VectorXd& x) 
-    {
-        VectorXd r_old = b - A*x;
-        SparseMatrix<double, RowMajor> restrict(r_old.size()/2, r_old.size());
+    MatrixXi J; // J = newFx1 list of indices into F
+    MatrixXi I; // I = newVx1 list of indices into V
+    VectorXi EMAP;
+    MatrixXi E,EF,EI;
+    typedef std::set<std::pair<double,int> > PriorityQueue;
+    PriorityQueue Q;
+    std::vector<PriorityQueue::iterator > Qit;
+    MatrixXd C;
 
-        std::vector<Triplet<double>> triplets;
-        triplets.reserve(r_old.size()/2 * 3);
-        for (int i = 0; i < restrict.rows()-1; ++i) {
-            triplets.push_back(Triplet<double>(i, (i*2),   0.25));
-            triplets.push_back(Triplet<double>(i, (i*2)+1, 0.50));
-            triplets.push_back(Triplet<double>(i, (i*2)+2, 0.25));
-        }
-        // handling edge case for even # of cols
-        int last = restrict.rows()-1;
-        triplets.push_back(Triplet<double>(last, (last*2),   0.25));
-        triplets.push_back(Triplet<double>(last, (last*2)+1, 0.50));
-        if (last*2+2 < restrict.cols())
-            triplets.push_back(Triplet<double>(last, (last*2)+2, 0.25));
-        restrict.setFromTriplets(triplets.begin(), triplets.end());
-        return restrict * r_old;
+    void setup(const MatrixXd& V, const MatrixXi& F) {
+        // If an edge were collapsed, we'd collapse it to these points:
+        igl::edge_flaps(F, E, EMAP, EF, EI);
+		Qit.resize(E.rows());
+
+		// Cost matrix
+    	C.resize(E.rows(),V.cols());
+    	VectorXd costs(E.rows());
+
+		// Build cost matrix
+    	for(int e = 0;e<E.rows();e++)
+    	{
+    	  double cost = e;
+    	  RowVectorXd p(1,3);
+          igl::shortest_edge_and_midpoint(e,V,F,E,EMAP,EF,EI,cost,p);
+    	  C.row(e) = p;
+    	  Qit[e] = Q.insert(std::pair<double,int>(cost,e)).first;
+    	}
+
+    }
+    
+    void construct_p(const MatrixXd& V, const MatrixXi& F, const size_t max_m, MatrixXd& VO, MatrixXi& FO) {
+        // TODO Check if is_edge_manifold
+        MatrixXd newV = V;
+        MatrixXi newF = F;
+
+		const int max_iter = std::ceil(0.01*Q.size());
+        int count = 0;
+      	for(int j = 0;j<max_iter;j++)
+      	{
+
+        	if (!igl::collapse_edge(igl::shortest_edge_and_midpoint,newV,newF,E,EMAP,EF,EI,Q,Qit,C))
+        	{
+           		std::cout << "Failed to remove" << std::endl;
+        	  	break;
+        	} 
+            ++count;
+		}
+        // https://github.com/libigl/libigl/blob/master/include/igl/decimate.cpp
+        std::cout << "Num collapsed: " << count << std::endl;
+        std::cout << "C.size() : " << C.rows() << std::endl;
+        VO = newV;
+        FO = newF;
+
     }
 
-    VectorXd prolong_residual(const SparseMatrix<double>& A, const VectorXd& b, const VectorXd& x) 
-    {
-        VectorXd r_old = b - A*x;
-        SparseMatrix<double, RowMajor> prolong(r_old.size()*2+1, r_old.size());
-
-        std::vector<Triplet<double>> triplets;
-        triplets.reserve(r_old.size()/2 * 3);
-        for (int i = 0; i < prolong.cols()-1; ++i) {
-            triplets.push_back(Triplet<double>((i*2),   i, 0.5));
-            triplets.push_back(Triplet<double>((i*2)+1, i, 1.0));
-            triplets.push_back(Triplet<double>((i*2)+2, i, 0.5));
-        }
-        // handling edge case for even # of cols
-        int last = prolong.cols()-1;
-        triplets.push_back(Triplet<double>(last*2, last,   0.5));
-        triplets.push_back(Triplet<double>(last*2+1, last, 1.0));
-        if (last*2+2 < prolong.cols())
-            triplets.push_back(Triplet<double>(last*2+2, last, 0.5));
-
-        prolong.setFromTriplets(triplets.begin(), triplets.end());
-        return prolong * r_old;
-    }
     void multigrid(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x, int depth)
     {
         if (depth == 0) {
             gauss_seidel(A, b, x, coarseIters); 
         } else {
             gauss_seidel(A, b, x, preIters); 
-            VectorXd r = restrict_residual(A, b, x);
+            // VectorXd r = restrict_residual(A, b, x);
             gauss_seidel(A, b, x, postIters); 
         }
     }
-}
+};
 
 #endif // SOLVER_H

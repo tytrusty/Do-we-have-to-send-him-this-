@@ -1,6 +1,7 @@
 #ifndef HEATHOOK_H
 #define HEATHOOK_H
 #include "PhysicsHook.h"
+#include "Solver.h"
 #include <igl/readOBJ.h>
 #include <iostream>
 #include <igl/isolines.h>
@@ -72,6 +73,7 @@ private:
     void solveDistance(const Eigen::MatrixXd& ugrad);
     double computeVolume();
     Eigen::Vector3d computeCenterOfMass(double volume_);
+    Solver solver;
 
     Eigen::MatrixXd V;
     Eigen::MatrixXi F;
