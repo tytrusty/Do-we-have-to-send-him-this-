@@ -2,16 +2,19 @@
 #define SOLVER_H
 
 #include <omp.h>
+#include <algorithm> 
 #include <Eigen/Core>
+#include <igl/slice.h>
 #include <igl/edge_flaps.h>
 #include <igl/collapse_edge.h>
-#include <igl/max_faces_stopping_condition.h>
-#include <igl/shortest_edge_and_midpoint.h>
-#include <igl/slice.h>
+#include <igl/adjacency_list.h>
 #include <igl/remove_unreferenced.h>
-#include <algorithm>
+#include <igl/shortest_edge_and_midpoint.h>
+#include <igl/max_faces_stopping_condition.h>
+#include <igl/decimate.h>
 
 using namespace Eigen;
+using std::vector;
 
 class Solver
 {
@@ -20,8 +23,7 @@ public:
     int iters_ = 400;
     float tolerance = 1e-7;
 
-    void updateIters(int iters) { iters_ = iters; }
-    void updateTolerance(int tol) { tolerance = tol; }
+    void updateIters(int iters) { iters_ = iters; } void updateTolerance(int tol) { tolerance = tol; }
     /**
      * Fast(ish) error computation
      * This is orphan omp function so we're assuming it's in parallel already
@@ -66,109 +68,54 @@ public:
         std::cout << "iters : " << iters << std::endl;
     }
 
-    VectorXi EMAP;
-    MatrixXi E,EF,EI;
-    typedef std::set<std::pair<double,int> > PriorityQueue;
-    PriorityQueue Q;
-    std::vector<PriorityQueue::iterator > Qit;
     std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > operators;
-    MatrixXd C;
 
-    void setup(const MatrixXd& V, const MatrixXi& F) {
-        // If an edge were collapsed, we'd collapse it to these points:
-        igl::edge_flaps(F, E, EMAP, EF, EI);
-        Qit.resize(E.rows());
-
-        // Cost matrix
-        C.resize(E.rows(),V.cols());
-        VectorXd costs(E.rows());
-
-        // Build cost matrix
-        for(int e = 0;e<E.rows();e++)
+    void multigrid_init(const MatrixXd& V, const MatrixXi& F)
+    {
+        MatrixXd fineV = V, coarseV;
+        MatrixXi fineF = F, coarseF;
+        VectorXi J,I;
+        // Coarsen mesh
+        while (igl::decimate(fineV,fineF,fineF.rows()/2,coarseV,coarseF, J, I))
         {
-          double cost = e;
-          RowVectorXd p(1,3);
-          igl::shortest_edge_and_midpoint(e,V,F,E,EMAP,EF,EI,cost,p);
-          C.row(e) = p;
-          Qit[e] = Q.insert(std::pair<double,int>(cost,e)).first;
-        }
+            const int fsize = fineV.rows();
+            const int csize = coarseV.rows();
+            SparseMatrix<double, RowMajor> p(fsize, csize);
+            std::vector<Triplet<double>> triplets;
+            // Form Two blocks of prolongation operator -- an Identity block coarse x coarse
+            // and a mapping from fine -> coarse vertices
+            for(int i = 0; i < csize; ++i)
+                triplets.push_back(Triplet<double>(i,i,1));
 
-    }
-    
-    void construct_p(const MatrixXd& V, const MatrixXi& F, const size_t max_m, MatrixXd& VO, MatrixXi& FO) {
-        // TODO Check if is_edge_manifold
-        MatrixXd newV = V;
-        MatrixXi newF = F;
-
-        const int max_iter = std::ceil(0.5*Q.size());
-        int count = 0;
-        if (Q.empty()) std::cout << "Q EMPTY" << std::endl;
-          for(int j = 0;j<max_iter;j++)
-          {
-            if (Q.empty())
-                break;
-
-            if (Q.begin()->first == std::numeric_limits<double>::infinity())
-                break; // min cost edge is infinite cost
-
-
-            if (!igl::collapse_edge(igl::shortest_edge_and_midpoint,newV,newF,E,EMAP,EF,EI,Q,Qit,C))
-            {
-                  break; // failed to remove
-            } 
-            ++count;
-        }
-
-        // https://github.com/libigl/libigl/blob/master/include/igl/decimate.cpp
-        std::cout << "Num collapsed: " << count << std::endl;
-        int m = 0;
-        for(int f = 0;f<F.rows();f++)
-        {
-            if(newF(f,0) != IGL_COLLAPSE_EDGE_NULL || 
-               newF(f,1) != IGL_COLLAPSE_EDGE_NULL || 
-               newF(f,2) != IGL_COLLAPSE_EDGE_NULL)
-            {
-                if (m != f)
-                    newF.row(m) = newF.row(f);
-                m++;
+            vector<vector<int>> A;
+            igl::adjacency_list(fineF,A);
+            // loop through invalid vertices and add rows to prolongation matrix that
+            // map a fine vertex to its neighbors in the coarse mesh.
+            int cnt = 0;
+            for (int i = 0; i < I.size(); i++) {
+                if (I[i] == -1) {
+                    int ringCnt = 0;
+                    // First sweep to count number of "valid" neighbors
+                    for (int j = 0; j < A[i].size(); j++) {
+                        if (I[A[i][j]] != -1) ringCnt++;
+                    }
+                    // Second sweep to add prolongation row
+                    for (int j = 0; j < A[i].size(); j++) {
+                        int fineToCoarse = I[A[i][j]];
+                        if (fineToCoarse != -1)
+                            triplets.push_back(Triplet<double>(cnt,fineToCoarse,1.0/ringCnt));
+                    }
+                    cnt++;
+                }
             }
+            p.setFromTriplets(triplets.begin(), triplets.end());
+            operators.push_back(p);
+            std::cout << " coarseV.size() : " << coarseV.rows() << std::endl;
+            fineV = coarseV;
+            fineF = coarseF;
         }
-        newF.conservativeResize(m,3);
-
-        VectorXi I; // I maps from Old to New Vertices
-        MatrixXd NV;
-        MatrixXi NF;
-        igl::remove_unreferenced(newV, newF, NV, NF, I);
-        std::cout << " I size: " << I.size() << std::endl;
-        int c = 0;
-        for (int i = 0; i < I.size(); i++) {
-            if (I[i] == -1) c++;
-        }
-        std::cout << "invalid cnt: " << c << std::endl;
-
-        VO = NV;
-        FO = NF;
-
-        // course and fine matrix sizes
-        const int fsize = V.rows();
-        const int csize = NV.rows();
-        SparseMatrix<double, RowMajor> p(fsize, csize);
-        std::vector<Triplet<double>> triplets;
-        // Form Two blocks of prolongation operator -- an Identity block coarse x coarse
-        // and a mapping from fine -> coarse vertices
-        for(int i = 0; i < csize; ++i)
-            triplets.push_back(Triplet(i,i,1);
-
-        // Make map 
-        // 1. Adjacency list for fine vertices
-        // 2. loop through invalid vertices
-        // 3. for-each vertex, find neighbors
-        // 4. Count the number of neighbors for prolongation value 1/R
-        // 5. map each fine vertex (that is removed) to a coarse, using I(fine) -> coarse(Index)
-        // 6. Add triplet
-        
-
     }
+
 
     void multigrid(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x, int depth)
     {
