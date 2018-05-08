@@ -342,10 +342,14 @@ void HeatHook::solveDistance(const MatrixXd& ugrad)
     std::cout << "div computation time (s): " << omp_get_wtime() - start << std::endl;
     // Solve for distance
     start = omp_get_wtime();
-    // Solver::gauss_seidel(L, div, phi);
-    ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
-    cg.compute(L);
-    phi = -cg.solve(div);
+
+    VectorXd u(phi.size());
+    solver.multigrid(L, div, u);
+    phi = u;
+
+    //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
+    //cg.compute(L);
+    //phi = -cg.solve(div);
     std::cout << "solve dist time (s): " << omp_get_wtime() - start << std::endl;
 }
 
@@ -412,12 +416,8 @@ void HeatHook::initSimulation()
     for (int i = 0; i < V.rows(); i++)
         V.row(i) -= cm;
     geodesic_dt = 5.0*M.diagonal().sum()/F.rows();
+
     solver.multigrid_init(V,F);
-    std::cout << "operators: " << solver.operators.size() << std::endl;
-    //solver.setup(V,F);
-    //solver.draw(V,F);
-    // source[0] = 1.0;
-    // Solver::multigrid(L, source, phi, 5);
 
 //    Cluster cluster(F, 69, V.rows());
 //    cluster.BFS();
@@ -477,8 +477,10 @@ bool HeatHook::simulateOneStep()
         normalize_color = false;
         VectorXd u = VectorXd(V.rows());
         SparseMatrix<double> A = M - heat_dt*L;
+
         SimplicialLDLT<SparseMatrix<double>> solver;
         solver.compute(A);
+        u.setZero();
         u = solver.solve(M*source);
         phi = u;
         source = u;
