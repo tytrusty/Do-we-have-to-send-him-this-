@@ -387,10 +387,13 @@ void HeatHook::initSimulation()
         std::cout << "Done reading OFF" << std::endl;
 
     }
-
-
     V *= 10.0; 
     prevClicked = -1;
+
+    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
+    solver.setup(V,F);
+    solver.construct_p(V,F,F.rows()/2, V, F);
+    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
 
     L = SparseMatrix<double>(V.rows(), V.rows());
     double start;
@@ -401,20 +404,18 @@ void HeatHook::initSimulation()
     V /= std::sqrt(Morig.diagonal().sum());
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
+
     std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
     source = VectorXd::Zero(V.rows());
     phi    = VectorXd::Zero(V.rows());
 
     double volume = computeVolume();
-    std::cout << "vol: " << volume << std::endl;
     Vector3d cm = computeCenterOfMass(volume);
     std::cout << "CM: " << cm << std::endl;
     for (int i = 0; i < V.rows(); i++)
         V.row(i) -= cm;
 
     geodesic_dt = 5.0*M.diagonal().sum()/F.rows();
-    std::cout << "geodesic_dt: " << geodesic_dt << std::endl;
-
     // source[0] = 1.0;
     // Solver::multigrid(L, source, phi, 5);
 
@@ -427,18 +428,10 @@ void HeatHook::initSimulation()
 //        }
 //        ++n;
 //    }
-    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
-    solver.setup(V,F);
-    solver.construct_p(V,F,F.rows()/2, V, F);
-    solver.construct_p(V,F,F.rows()/2, V, F);
-    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
 }
 
 bool HeatHook::simulateOneStep()
 {
-    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
-    solver.construct_p(V,F,F.rows()/2, V, F);
-    std::cout << "V rows: " << V.rows() << " F rows: " << F.rows() << std::endl;
 
     if (enable_mcf) // curvature flow 
     {

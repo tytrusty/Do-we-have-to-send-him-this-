@@ -7,6 +7,9 @@
 #include <igl/collapse_edge.h>
 #include <igl/max_faces_stopping_condition.h>
 #include <igl/shortest_edge_and_midpoint.h>
+#include <igl/slice.h>
+#include <igl/remove_unreferenced.h>
+#include <algorithm>
 
 using namespace Eigen;
 
@@ -63,33 +66,32 @@ public:
         std::cout << "iters : " << iters << std::endl;
     }
 
-    MatrixXi J; // J = newFx1 list of indices into F
-    MatrixXi I; // I = newVx1 list of indices into V
     VectorXi EMAP;
     MatrixXi E,EF,EI;
     typedef std::set<std::pair<double,int> > PriorityQueue;
     PriorityQueue Q;
     std::vector<PriorityQueue::iterator > Qit;
+    std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > operators;
     MatrixXd C;
 
     void setup(const MatrixXd& V, const MatrixXi& F) {
         // If an edge were collapsed, we'd collapse it to these points:
         igl::edge_flaps(F, E, EMAP, EF, EI);
-		Qit.resize(E.rows());
+        Qit.resize(E.rows());
 
-		// Cost matrix
-    	C.resize(E.rows(),V.cols());
-    	VectorXd costs(E.rows());
+        // Cost matrix
+        C.resize(E.rows(),V.cols());
+        VectorXd costs(E.rows());
 
-		// Build cost matrix
-    	for(int e = 0;e<E.rows();e++)
-    	{
-    	  double cost = e;
-    	  RowVectorXd p(1,3);
+        // Build cost matrix
+        for(int e = 0;e<E.rows();e++)
+        {
+          double cost = e;
+          RowVectorXd p(1,3);
           igl::shortest_edge_and_midpoint(e,V,F,E,EMAP,EF,EI,cost,p);
-    	  C.row(e) = p;
-    	  Qit[e] = Q.insert(std::pair<double,int>(cost,e)).first;
-    	}
+          C.row(e) = p;
+          Qit[e] = Q.insert(std::pair<double,int>(cost,e)).first;
+        }
 
     }
     
@@ -98,23 +100,73 @@ public:
         MatrixXd newV = V;
         MatrixXi newF = F;
 
-		const int max_iter = std::ceil(0.01*Q.size());
+        const int max_iter = std::ceil(0.5*Q.size());
         int count = 0;
-      	for(int j = 0;j<max_iter;j++)
-      	{
+        if (Q.empty()) std::cout << "Q EMPTY" << std::endl;
+          for(int j = 0;j<max_iter;j++)
+          {
+            if (Q.empty())
+                break;
 
-        	if (!igl::collapse_edge(igl::shortest_edge_and_midpoint,newV,newF,E,EMAP,EF,EI,Q,Qit,C))
-        	{
-           		std::cout << "Failed to remove" << std::endl;
-        	  	break;
-        	} 
+            if (Q.begin()->first == std::numeric_limits<double>::infinity())
+                break; // min cost edge is infinite cost
+
+
+            if (!igl::collapse_edge(igl::shortest_edge_and_midpoint,newV,newF,E,EMAP,EF,EI,Q,Qit,C))
+            {
+                  break; // failed to remove
+            } 
             ++count;
-		}
+        }
+
         // https://github.com/libigl/libigl/blob/master/include/igl/decimate.cpp
         std::cout << "Num collapsed: " << count << std::endl;
-        std::cout << "C.size() : " << C.rows() << std::endl;
-        VO = newV;
-        FO = newF;
+        int m = 0;
+        for(int f = 0;f<F.rows();f++)
+        {
+            if(newF(f,0) != IGL_COLLAPSE_EDGE_NULL || 
+               newF(f,1) != IGL_COLLAPSE_EDGE_NULL || 
+               newF(f,2) != IGL_COLLAPSE_EDGE_NULL)
+            {
+                if (m != f)
+                    newF.row(m) = newF.row(f);
+                m++;
+            }
+        }
+        newF.conservativeResize(m,3);
+
+        VectorXi I; // I maps from Old to New Vertices
+        MatrixXd NV;
+        MatrixXi NF;
+        igl::remove_unreferenced(newV, newF, NV, NF, I);
+        std::cout << " I size: " << I.size() << std::endl;
+        int c = 0;
+        for (int i = 0; i < I.size(); i++) {
+            if (I[i] == -1) c++;
+        }
+        std::cout << "invalid cnt: " << c << std::endl;
+
+        VO = NV;
+        FO = NF;
+
+        // course and fine matrix sizes
+        const int fsize = V.rows();
+        const int csize = NV.rows();
+        SparseMatrix<double, RowMajor> p(fsize, csize);
+        std::vector<Triplet<double>> triplets;
+        // Form Two blocks of prolongation operator -- an Identity block coarse x coarse
+        // and a mapping from fine -> coarse vertices
+        for(int i = 0; i < csize; ++i)
+            triplets.push_back(Triplet(i,i,1);
+
+        // Make map 
+        // 1. Adjacency list for fine vertices
+        // 2. loop through invalid vertices
+        // 3. for-each vertex, find neighbors
+        // 4. Count the number of neighbors for prolongation value 1/R
+        // 5. map each fine vertex (that is removed) to a coarse, using I(fine) -> coarse(Index)
+        // 6. Add triplet
+        
 
     }
 
