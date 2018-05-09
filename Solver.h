@@ -19,6 +19,7 @@ public:
     int iters_ = 400;
     float tolerance = 1e-7;
     std::map<int,vector<int> > fineMap;
+    std::map<int,int> backptr;
 
 	bool decimate(
 	  const Eigen::MatrixXd & OV,
@@ -125,8 +126,8 @@ public:
 	    {
             const int eflip = Ecopy(e,0)>Ecopy(e,1);
             // source and destination
-            const int s = eflip?Ecopy(e,1):Ecopy(e,0); 
-            const int d = eflip?Ecopy(e,0):Ecopy(e,1); 
+            int s = eflip?Ecopy(e,1):Ecopy(e,0); 
+            int d = eflip?Ecopy(e,0):Ecopy(e,1); 
             std::cout << "fineMap push back " << s << " d : " << d << std::endl;
 /* DOESNT HANDLE ALL EDGE CASES
 fineMap push back 11 d : 14
@@ -140,9 +141,17 @@ fineMap push back 0 d : 2
 fineMap push back 8 d : 15
 fineMap push back 10 d : 16
 */
+            if (backptr.find(s) != backptr.end()) { // source already eliminated!
+                s = backptr[s];
+            }
             if (fineMap.find(d) != fineMap.end())
+            {
                 fineMap[s].insert(fineMap[s].end(), fineMap[d].begin(), fineMap[d].end());
+                fineMap[d].clear();
+            }
+            std::cout << "\tfineMap push back " << s << " d : " << d << std::endl;
             fineMap[s].push_back(d);
+            backptr[d] = s; // d points to existing vertex, s. 
             if(stopping_condition(V,F,E,EMAP,EF,EI,Q,Qit,C,e,e1,e2,f1,f2))
 	        {
 	            clean_finish = true;
@@ -361,7 +370,11 @@ fineMap push back 10 d : 16
             std::cout << "size: " << x.size() << " preerror: " << preerror << std::endl;
 
             // Restriction
-            VectorXd r = R[depth] * (b - A*x);
+            VectorXd tmp = A * x;
+            VectorXd r = (b - tmp);
+            std::cout << "r: " << r.transpose() << std::endl;
+            // r = R[depth] * r;
+            std::cout << "r: " << r << std::endl;
             std::cout << "R dim : " << R[depth].rows() << " x " << R[depth].cols() << std::endl;
             std::cout << "P dim : " << P[depth].rows() << " x " << P[depth].cols() << std::endl;
             std::cout << "A dim : " << A.rows() << " x " << A.cols() << std::endl;
