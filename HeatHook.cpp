@@ -344,7 +344,9 @@ void HeatHook::solveDistance(const MatrixXd& ugrad)
     start = omp_get_wtime();
 
     VectorXd u(phi.size());
-    solver.multigrid(L, div, u);
+    Solver asdf;
+    asdf.multigrid_init(V,F);
+    asdf.multigrid(L, div, u);
     phi = u;
 
     //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
@@ -410,14 +412,15 @@ void HeatHook::initSimulation()
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
 
-    double volume = computeVolume();
-    Vector3d cm = computeCenterOfMass(volume);
-    std::cout << "CM: " << cm << std::endl;
-    for (int i = 0; i < V.rows(); i++)
-        V.row(i) -= cm;
+    //double volume = computeVolume();
+    //Vector3d cm = computeCenterOfMass(volume);
+    //std::cout << "CM: " << cm << std::endl;
+    //for (int i = 0; i < V.rows(); i++)
+    //    V.row(i) -= cm;
     geodesic_dt = 5.0*M.diagonal().sum()/F.rows();
 
-    solver.multigrid_init(V,F);
+    //solver.multigrid_init(V,F);
+    // solver.multigrid_init(V,F);
 
 //    Cluster cluster(F, 69, V.rows());
 //    cluster.BFS();
@@ -431,8 +434,6 @@ void HeatHook::initSimulation()
 }
 bool HeatHook::simulateOneStep()
 {
-    // solver.draw(V,F);
-
     if (enable_mcf) // curvature flow 
     {
         SparseMatrix<double>& useM = mass_fixed ? M : Morig;
