@@ -14,7 +14,7 @@ public:
     {
 
     }
-    // const int preIters=3, postIters=2, coarseIters=10;
+    //const int preIters=3, postIters=2, coarseIters=10;
     const int preIters=30, postIters=20, coarseIters=100;
     int iters_ = 400;
     float tolerance = 1e-7;
@@ -119,6 +119,7 @@ public:
 	      // min cost edge is infinite cost
 	      break;
 	    }
+
 	    int e,e1,e2,f1,f2;
 	    if(igl::collapse_edge(
 	       cost_and_placement, pre_collapse, post_collapse,
@@ -128,19 +129,7 @@ public:
             // source and destination
             int s = eflip?Ecopy(e,1):Ecopy(e,0); 
             int d = eflip?Ecopy(e,0):Ecopy(e,1); 
-            std::cout << "fineMap push back " << s << " d : " << d << std::endl;
-/* DOESNT HANDLE ALL EDGE CASES
-fineMap push back 11 d : 14
-fineMap push back 5 d : 15
-fineMap push back 0 d : 12
-fineMap push back 0 d : 10
-fineMap push back 2 d : 13
-fineMap push back 1 d : 3
-fineMap push back 1 d : 4
-fineMap push back 0 d : 2
-fineMap push back 8 d : 15
-fineMap push back 10 d : 16
-*/
+            // std::cout << "fineMap push back " << s << " d : " << d << std::endl;
             if (backptr.find(s) != backptr.end()) { // source already eliminated!
                 s = backptr[s];
             }
@@ -149,7 +138,7 @@ fineMap push back 10 d : 16
                 fineMap[s].insert(fineMap[s].end(), fineMap[d].begin(), fineMap[d].end());
                 fineMap[d].clear();
             }
-            std::cout << "\tfineMap push back " << s << " d : " << d << std::endl;
+            //std::cout << "\tfineMap push back " << s << " d : " << d << std::endl;
             fineMap[s].push_back(d);
             backptr[d] = s; // d points to existing vertex, s. 
             if(stopping_condition(V,F,E,EMAP,EF,EI,Q,Qit,C,e,e1,e2,f1,f2))
@@ -250,9 +239,6 @@ fineMap push back 10 d : 16
         VectorXi _1, I2;
         igl::remove_unreferenced(Eigen::MatrixXd(U),Eigen::MatrixXi(G),U,G,_1,I2);
         //igl::slice(Eigen::VectorXi(I),I2,1,I);
-        //std::cout << " I: " << I << std::endl;
-        //std::cout << "G: \n" << G << std::endl;
-        //std::cout << "F: \n" << F << std::endl;
         return ret;
 
     }
@@ -263,7 +249,6 @@ fineMap push back 10 d : 16
      * This is orphan omp function so we're assuming it's in parallel already
      */
     void fast_error(const VectorXd& a, const VectorXd& b, double& norm) {
-        // Assert a.size == b.size TODO
         norm = 0.0;
         #pragma omp for reduction(+:norm)
         for (int i = 0; i < a.size(); i++) {
@@ -277,7 +262,7 @@ fineMap push back 10 d : 16
             int max_iters)
     {
         int iters = 0;
-        x.setZero();
+        //x.setZero();
         double dxi = 0.0;
         int size = x.size();
         double error = 1.0;
@@ -294,6 +279,8 @@ fineMap push back 10 d : 16
                 x[i] = dxi/A.coeff(i,i);
             }
             ++iters;
+            //error = (x - xold).norm();
+            //std::cout << "error: " <<  error << std::endl;
             fast_error(x, xold, error);
         }
         return error;
@@ -301,6 +288,11 @@ fineMap push back 10 d : 16
 
     std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > P;
     std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > R;
+    std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > R_b;
+
+    std::vector<MatrixXd, Eigen::aligned_allocator<MatrixXd> > Vsub;
+    std::vector<MatrixXi, Eigen::aligned_allocator<MatrixXi> > Fsub;
+    std::vector<VectorXd, Eigen::aligned_allocator<VectorXd> > phisub;
     int max_depth;
 
     void multigrid_init(const MatrixXd& V, const MatrixXi& F)
@@ -309,13 +301,15 @@ fineMap push back 10 d : 16
         MatrixXi fineF = F, coarseF;
         VectorXi J,I;
         // Coarsen mesh
-        while (decimate(fineV,fineF,fineF.rows()/2,coarseV,coarseF, J, I))
+        while (decimate(fineV,fineF,fineF.rows()/1.2,coarseV,coarseF, J, I))
         {
             const int fsize = fineV.rows();
             const int csize = coarseV.rows(); // don't account for infinite vertex
             SparseMatrix<double, RowMajor> r(csize, fsize);
+            SparseMatrix<double, RowMajor> rb(csize, fsize);
             SparseMatrix<double, RowMajor> p(fsize, csize);
             std::vector<Triplet<double>> rtriplets;
+            std::vector<Triplet<double>> rbtriplets;
             std::vector<Triplet<double>> ptriplets;
 
             for (int v = 0; v < I.size() - 1; ++v) {
@@ -325,12 +319,15 @@ fineMap push back 10 d : 16
                     if (fineMap.find(v) != fineMap.end()) {
                         double avg = 1.0 / (1 + fineMap[v].size()); 
                         for (int i = 0; i < fineMap[v].size(); i++) {
-                            rtriplets.push_back(Triplet<double>(coarsev,fineMap[v][i],avg));
+                            rtriplets.push_back(Triplet<double>(coarsev,fineMap[v][i],1)); // avg
+                            rbtriplets.push_back(Triplet<double>(coarsev,fineMap[v][i],avg)); // avg
                             ptriplets.push_back(Triplet<double>(fineMap[v][i], coarsev, 1)); // 
                         }
-                        rtriplets.push_back(Triplet<double>(coarsev,v,avg));
+                        rtriplets.push_back(Triplet<double>(coarsev,v,1)); // avg
+                        rbtriplets.push_back(Triplet<double>(coarsev,v,avg)); // avg
                     } else {
                         rtriplets.push_back(Triplet<double>(coarsev,v,1));
+                        rbtriplets.push_back(Triplet<double>(coarsev,v,1));
                     }
                     ptriplets.push_back(Triplet<double>(v,coarsev,1));
                 }
@@ -339,20 +336,24 @@ fineMap push back 10 d : 16
             p.setFromTriplets(ptriplets.begin(), ptriplets.end());
             P.push_back(p);
             r.setFromTriplets(rtriplets.begin(), rtriplets.end());
+            rb.setFromTriplets(rbtriplets.begin(), rbtriplets.end());
             R.push_back(r);
-            if (csize == 13) {
-                std::cout << "I:  \n" << I << std::endl;
-                std::cout << " p : \n" << MatrixXd(p) << std::endl;
-                std::cout << " r : \n" << MatrixXd(r) << std::endl;
-
-            }
+            R_b.push_back(rb);
+            //    std::cout << "I:  \n" << I << std::endl;
+            //    std::cout << " p : \n" << MatrixXd(p) << std::endl;
+            //    std::cout << " r : \n" << MatrixXd(r) << std::endl;
+            //    std::cout << " rb : \n" << MatrixXd(rb) << std::endl;
             std::cout << " coarseV.size() : " << coarseV.rows() << std::endl;
+            Vsub.push_back(coarseV);
+            Fsub.push_back(coarseF);
             fineV = coarseV;
             fineF = coarseF;
             fineMap.clear();
+            backptr.clear();
         }
         max_depth = P.size();
     }
+
 
     void multigrid(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x, int depth = 0)
     {
@@ -360,37 +361,21 @@ fineMap push back 10 d : 16
             std::cout << "End condition " << std::endl;
             double error = gauss_seidel(A, b, x, coarseIters); 
             std::cout << "size: " << x.size() << " error: " <<  error << std::endl;
-            std::cout << "A dim : " << A.rows() << " x " << A.cols() << std::endl;
-            std::cout << "A : \n" << A << std::endl;
-            std::cout << "r: \n " << b << std::endl;
-            std::cout << "e: \n " << x << std::endl;
         } else {
             // Presmoothing
             double preerror = gauss_seidel(A, b, x, preIters); 
             std::cout << "size: " << x.size() << " preerror: " << preerror << std::endl;
 
             // Restriction
-            VectorXd tmp = A * x;
-            VectorXd r = (b - tmp);
-            std::cout << "r: " << r.transpose() << std::endl;
-            // r = R[depth] * r;
-            std::cout << "r: " << r << std::endl;
-            std::cout << "R dim : " << R[depth].rows() << " x " << R[depth].cols() << std::endl;
-            std::cout << "P dim : " << P[depth].rows() << " x " << P[depth].cols() << std::endl;
-            std::cout << "A dim : " << A.rows() << " x " << A.cols() << std::endl;
-            //std::cout << "A : \n" << A << std::endl;
-            //std::cout << "r: \n " <<  r << std::endl;
+            VectorXd r = R[depth] * (b - A*x);
             SparseMatrix<double> restrictA = R[depth] * A * P[depth];
-
             VectorXd cx(r.size());
+            cx.setZero();
             multigrid(restrictA, r, cx, depth+1); 
-            if (depth == max_depth-1) {
-                std::cout << "P Mat: \n" << P[depth] << std::endl;
-                std::cout << "cx: " << cx << std::endl;
-            }
 
             // Prolong error and correct fine solution
             x += P[depth]*cx;
+            phisub.push_back(x);
 
             // Post smoothing
             double posterror = gauss_seidel(A, b, x, postIters); 

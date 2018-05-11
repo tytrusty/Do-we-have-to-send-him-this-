@@ -344,22 +344,29 @@ void HeatHook::solveDistance(const MatrixXd& ugrad)
     start = omp_get_wtime();
 
     VectorXd u(phi.size());
+    u.setZero();
     Solver asdf;
     asdf.multigrid_init(V,F);
     asdf.multigrid(L, div, u);
     phi = u;
+    //std::cout << "Vsub.size(): " << asdf.Vsub[5].rows() << std::endl;
+    //std::cout << "Fsub.size(): " << asdf.Fsub[5].rows() << std::endl;
+    //std::cout << "pihsub: " << asdf.phisub[asdf.phisub.size()-7].size() << std::endl;
+    //V = asdf.Vsub[5];
+    //F = asdf.Fsub[5];
+    //phi = asdf.phisub[asdf.phisub.size()-7];
 
     //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
     //cg.compute(L);
-    //phi = -cg.solve(div);
+    //phi = cg.solve(div);
     std::cout << "solve dist time (s): " << omp_get_wtime() - start << std::endl;
 }
 
 
 void HeatHook::initSimulation()
 {
-    //Eigen::initParallel();
-    //std::cout << "Num threads: " << Eigen::nbThreads() << std::endl;
+    Eigen::initParallel();
+    std::cout << "Num threads: " << Eigen::nbThreads() << std::endl;
     //#pragma omp parallel
     //{
     //    std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
