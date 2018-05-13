@@ -150,9 +150,9 @@ protected:
             }
             else
             {
-                render_mutex.lock();
+                //render_mutex.lock();
                 updateRenderGeometry();
-                render_mutex.unlock();
+                //render_mutex.unlock();
                 done = simulateOneStep();
             }
             status_mutex.lock();

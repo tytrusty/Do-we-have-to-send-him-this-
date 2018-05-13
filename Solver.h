@@ -10,79 +10,46 @@ using std::vector;
 class Solver
 {
 public:
-    Solver()
-    {
-
-    }
+    Solver() {}
     //const int preIters=3, postIters=2, coarseIters=10;
-    const int preIters=30, postIters=20, coarseIters=100;
+    //const int preIters=30, postIters=20, coarseIters=100;
+    const int preIters=500, postIters=1000, coarseIters=100;
     int iters_ = 400;
     float tolerance = 1e-7;
     std::map<int,vector<int> > fineMap;
     std::map<int,int> backptr;
 
 	bool decimate(
-	  const Eigen::MatrixXd & OV,
-	  const Eigen::MatrixXi & OF,
-	  const std::function<void(
-	    const int,
-	    const Eigen::MatrixXd &,
-	    const Eigen::MatrixXi &,
-	    const Eigen::MatrixXi &,
-	    const Eigen::VectorXi &,
-	    const Eigen::MatrixXi &,
-	    const Eigen::MatrixXi &,
-	    double &,
-	    Eigen::RowVectorXd &)> & cost_and_placement,
-	  const std::function<bool(
-	      const Eigen::MatrixXd &,
-	      const Eigen::MatrixXi &,
-	      const Eigen::MatrixXi &,
-	      const Eigen::VectorXi &,
-	      const Eigen::MatrixXi &,
-	      const Eigen::MatrixXi &,
-	      const std::set<std::pair<double,int> > &,
-	      const std::vector<std::set<std::pair<double,int> >::iterator > &,
-	      const Eigen::MatrixXd &,
-	      const int,
-	      const int,
-	      const int,
-	      const int,
-	      const int)> & stopping_condition,
-	    const std::function<bool(
-	      const Eigen::MatrixXd &                                         ,/*V*/
-	      const Eigen::MatrixXi &                                         ,/*F*/
-	      const Eigen::MatrixXi &                                         ,/*E*/
-	      const Eigen::VectorXi &                                         ,/*EMAP*/
-	      const Eigen::MatrixXi &                                         ,/*EF*/
-	      const Eigen::MatrixXi &                                         ,/*EI*/
-	      const std::set<std::pair<double,int> > &                        ,/*Q*/
-	      const std::vector<std::set<std::pair<double,int> >::iterator > &,/*Qit*/
-	      const Eigen::MatrixXd &                                         ,/*C*/
-	      const int                                                        /*e*/
-	      )> & pre_collapse,
+	    const Eigen::MatrixXd & OV, const Eigen::MatrixXi & OF,
 	    const std::function<void(
-	      const Eigen::MatrixXd &                                         ,   /*V*/
-	      const Eigen::MatrixXi &                                         ,   /*F*/
-	      const Eigen::MatrixXi &                                         ,   /*E*/
-	      const Eigen::VectorXi &                                         ,/*EMAP*/
-	      const Eigen::MatrixXi &                                         ,  /*EF*/
-	      const Eigen::MatrixXi &                                         ,  /*EI*/
-	      const std::set<std::pair<double,int> > &                        ,   /*Q*/
-	      const std::vector<std::set<std::pair<double,int> >::iterator > &, /*Qit*/
-	      const Eigen::MatrixXd &                                         ,   /*C*/
-	      const int                                                       ,   /*e*/
-	      const int                                                       ,  /*e1*/
-	      const int                                                       ,  /*e2*/
-	      const int                                                       ,  /*f1*/
-	      const int                                                       ,  /*f2*/
-	      const bool                                                  /*collapsed*/
-	      )> & post_collapse,
-	  Eigen::MatrixXd & U,
-	  Eigen::MatrixXi & G,
-	  Eigen::VectorXi & J,
-	  Eigen::VectorXi & I
-	  )
+            const int, const Eigen::MatrixXd &,
+	        const Eigen::MatrixXi &, const Eigen::MatrixXi &, const Eigen::VectorXi &,
+	        const Eigen::MatrixXi &, const Eigen::MatrixXi &, double &,
+	        Eigen::RowVectorXd &)> & cost_and_placement,
+	    const std::function<bool(
+            const Eigen::MatrixXd &, const Eigen::MatrixXi &,
+	        const Eigen::MatrixXi &, const Eigen::VectorXi &, const Eigen::MatrixXi &,
+	        const Eigen::MatrixXi &, const std::set<std::pair<double,int> > &,
+	        const std::vector<std::set<std::pair<double,int> >::iterator > &,
+	        const Eigen::MatrixXd &, const int, const int, const int,
+	        const int, const int)> & stopping_condition,
+        const std::function<bool(
+	        const Eigen::MatrixXd &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+	        const Eigen::VectorXi &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+	        const std::set<std::pair<double,int> > &,
+	        const std::vector<std::set<std::pair<double,int> >::iterator > &,
+	        const Eigen::MatrixXd &,
+	        const int                                                        
+	        )> & pre_collapse,
+	    const std::function<void(
+	        const Eigen::MatrixXd &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+	        const Eigen::VectorXi &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+	        const std::set<std::pair<double,int> > & ,
+	        const std::vector<std::set<std::pair<double,int> >::iterator > &,
+	        const Eigen::MatrixXd &, const int, const int, const int, const int,
+	        const int, const bool                                                  
+	        )> & post_collapse,
+	    Eigen::MatrixXd & U, Eigen::MatrixXi & G, Eigen::VectorXi & J, Eigen::VectorXi & I)
 	{
 	  // Working copies
 	  Eigen::MatrixXd V = OV;
@@ -185,13 +152,8 @@ public:
     // Edited so that the I map is not spliced. (I need the -1 values so that I know which
     // vertices were destroyed). 
     bool decimate(
-        const Eigen::MatrixXd & V,
-        const Eigen::MatrixXi & F,
-        const size_t max_m,
-        Eigen::MatrixXd & U,
-        Eigen::MatrixXi & G,
-        Eigen::VectorXi & J,
-        Eigen::VectorXi & I)
+        const Eigen::MatrixXd & V, const Eigen::MatrixXi & F, const size_t max_m,
+        Eigen::MatrixXd & U, Eigen::MatrixXi & G, Eigen::VectorXi & J, Eigen::VectorXi & I)
     {
         // Original number of faces
         const int orig_m = F.rows();
@@ -205,39 +167,30 @@ public:
         // decimate will not work correctly on non-edge-manifold meshes. By extension
         // this includes meshes with non-manifold vertices on the boundary since these
         // will create a non-manifold edge when connected to infinity.
-        if(!igl::is_edge_manifold(FO))
-        {
-          return false;
+        if(!igl::is_edge_manifold(FO)) { 
+            return false; 
         }
         const auto always_try = [](
-          const Eigen::MatrixXd &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
-          const Eigen::VectorXi &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
-          const std::set<std::pair<double,int> > &                        ,
-          const std::vector<std::set<std::pair<double,int> >::iterator > &,
-          const Eigen::MatrixXd &, const int) -> bool { return true;};
+            const Eigen::MatrixXd &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+            const Eigen::VectorXi &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+            const std::set<std::pair<double,int> > &                        ,
+            const std::vector<std::set<std::pair<double,int> >::iterator > &,
+            const Eigen::MatrixXd &, const int) -> bool { return true;};
         const auto never_care = [](
-          const Eigen::MatrixXd &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
-          const Eigen::VectorXi &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
-          const std::set<std::pair<double,int> > &,
-          const std::vector<std::set<std::pair<double,int> >::iterator > &,
-          const Eigen::MatrixXd &, const int, const int, const int, const int, 
-          const int, const bool )-> void { };
-        bool ret = decimate(
-          VO,
-          FO,
-          igl::shortest_edge_and_midpoint,
-          igl::max_faces_stopping_condition(m,orig_m,max_m),
-          always_try,
-          never_care,
-          U,
-          G,
-          J,
-          I);
-        const Eigen::Array<bool,Eigen::Dynamic,1> keep = (J.array()<orig_m);
-        igl::slice_mask(Eigen::MatrixXi(G),keep,1,G);
-        igl::slice_mask(Eigen::VectorXi(J),keep,1,J);
-        VectorXi _1, I2;
-        igl::remove_unreferenced(Eigen::MatrixXd(U),Eigen::MatrixXi(G),U,G,_1,I2);
+            const Eigen::MatrixXd &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+            const Eigen::VectorXi &, const Eigen::MatrixXi &, const Eigen::MatrixXi &,
+            const std::set<std::pair<double,int> > &,
+            const std::vector<std::set<std::pair<double,int> >::iterator > &,
+            const Eigen::MatrixXd &, const int, const int, const int, const int, 
+            const int, const bool )-> void { };
+        bool ret = decimate(VO, FO, igl::shortest_edge_and_midpoint,
+            igl::max_faces_stopping_condition(m,orig_m,max_m), always_try,
+            never_care, U, G, J, I);
+        //const Eigen::Array<bool,Eigen::Dynamic,1> keep = (J.array()<orig_m);
+        //igl::slice_mask(Eigen::MatrixXi(G),keep,1,G);
+        //igl::slice_mask(Eigen::VectorXi(J),keep,1,J);
+        //VectorXi _1, I2;
+        //igl::remove_unreferenced(Eigen::MatrixXd(U),Eigen::MatrixXi(G),U,G,_1,I2);
         //igl::slice(Eigen::VectorXi(I),I2,1,I);
         return ret;
 
@@ -250,7 +203,7 @@ public:
      */
     void fast_error(const VectorXd& a, const VectorXd& b, double& norm) {
         norm = 0.0;
-        #pragma omp for reduction(+:norm)
+        #pragma omp parallel for reduction(+:norm)
         for (int i = 0; i < a.size(); i++) {
             double diff = a[i]-b[i];
             norm += diff*diff;
@@ -259,17 +212,17 @@ public:
     }
 
     double gauss_seidel(const SparseMatrix<double>& A, const VectorXd& b, VectorXd& x,
-            int max_iters)
+            int max_iters, bool a = false)
     {
         int iters = 0;
-        //x.setZero();
         double dxi = 0.0;
         int size = x.size();
         double error = 1.0;
         VectorXd xold;
-        while (iters < max_iters && error >= tolerance) {
+        double tol = tolerance;
+        while (/*iters < max_iters && */ error >= tol) {
             xold = x;
-            // #pragma omp parallel for private(dxi)  
+            #pragma omp parallel for private(dxi) ordered
             for (int i = 0; i < A.outerSize(); ++i) {
                 dxi = b.coeff(i);
                 for(SparseMatrix<double>::InnerIterator it(A,i); it; ++it) {
@@ -282,36 +235,42 @@ public:
             //error = (x - xold).norm();
             //std::cout << "error: " <<  error << std::endl;
             fast_error(x, xold, error);
+            if (iters > max_iters && a) tol = 1e-4;
+            else if (iters > max_iters) break;
         }
         return error;
     }
 
-    std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > P;
-    std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > R;
-    std::vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > R_b;
-
-    std::vector<MatrixXd, Eigen::aligned_allocator<MatrixXd> > Vsub;
-    std::vector<MatrixXi, Eigen::aligned_allocator<MatrixXi> > Fsub;
-    std::vector<VectorXd, Eigen::aligned_allocator<VectorXd> > phisub;
+    vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > P;
+    vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > R;
+    vector<SparseMatrix<double>,Eigen::aligned_allocator<SparseMatrix<double>> > R_b;
+    vector<MatrixXd, Eigen::aligned_allocator<MatrixXd> > Vsub;
+    vector<MatrixXi, Eigen::aligned_allocator<MatrixXi> > Fsub;
+    vector<VectorXd, Eigen::aligned_allocator<VectorXd> > phisub;
     int max_depth;
+
 
     void multigrid_init(const MatrixXd& V, const MatrixXi& F)
     {
+        P.clear(); 
+        R.clear();
+        R_b.clear();
         MatrixXd fineV = V, coarseV;
         MatrixXi fineF = F, coarseF;
         VectorXi J,I;
         // Coarsen mesh
-        while (decimate(fineV,fineF,fineF.rows()/1.2,coarseV,coarseF, J, I))
+        while (decimate(fineV,fineF,fineF.rows()/1.3,coarseV,coarseF, J, I))
         {
             const int fsize = fineV.rows();
             const int csize = coarseV.rows(); // don't account for infinite vertex
             SparseMatrix<double, RowMajor> r(csize, fsize);
             SparseMatrix<double, RowMajor> rb(csize, fsize);
             SparseMatrix<double, RowMajor> p(fsize, csize);
-            std::vector<Triplet<double>> rtriplets;
-            std::vector<Triplet<double>> rbtriplets;
-            std::vector<Triplet<double>> ptriplets;
+            vector<Triplet<double>> rtriplets;
+            vector<Triplet<double>> rbtriplets;
+            vector<Triplet<double>> ptriplets;
 
+            // Build prolongation and restriction operators
             for (int v = 0; v < I.size() - 1; ++v) {
                 int coarsev = I[v];
                 // std::cout << "v: " << v << " coarsev: " << coarsev << std::endl;
@@ -339,17 +298,18 @@ public:
             rb.setFromTriplets(rbtriplets.begin(), rbtriplets.end());
             R.push_back(r);
             R_b.push_back(rb);
-            //    std::cout << "I:  \n" << I << std::endl;
-            //    std::cout << " p : \n" << MatrixXd(p) << std::endl;
-            //    std::cout << " r : \n" << MatrixXd(r) << std::endl;
-            //    std::cout << " rb : \n" << MatrixXd(rb) << std::endl;
-            std::cout << " coarseV.size() : " << coarseV.rows() << std::endl;
-            Vsub.push_back(coarseV);
-            Fsub.push_back(coarseF);
+            //  std::cout << "I:  \n" << I << std::endl;
+            //  std::cout << " p : \n" << MatrixXd(p) << std::endl;
+            //  std::cout << " r : \n" << MatrixXd(r) << std::endl;
+            //  std::cout << " rb : \n" << MatrixXd(rb) << std::endl;
+            //  std::cout << " coarseV.size() : " << coarseV.rows() << std::endl;
+            //***// Vsub.push_back(coarseV);
+            //***// Fsub.push_back(coarseF);
             fineV = coarseV;
             fineF = coarseF;
             fineMap.clear();
             backptr.clear();
+            if (coarseV.rows() < 2100) break;
         }
         max_depth = P.size();
     }
@@ -359,8 +319,7 @@ public:
     {
         if (depth == max_depth) {
             std::cout << "End condition " << std::endl;
-            double error = gauss_seidel(A, b, x, coarseIters); 
-            std::cout << "size: " << x.size() << " error: " <<  error << std::endl;
+            double error = gauss_seidel(A, b, x, coarseIters); std::cout << "size: " << x.size() << " error: " <<  error << std::endl;
         } else {
             // Presmoothing
             double preerror = gauss_seidel(A, b, x, preIters); 
@@ -375,10 +334,11 @@ public:
 
             // Prolong error and correct fine solution
             x += P[depth]*cx;
-            phisub.push_back(x);
+            
+            //****// phisub.push_back(x);
 
             // Post smoothing
-            double posterror = gauss_seidel(A, b, x, postIters); 
+            double posterror = gauss_seidel(A, b, x, postIters, true); 
             std::cout << "size: " << x.size() << " posterror: " << posterror << std::endl;
         }
 

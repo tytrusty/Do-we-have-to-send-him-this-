@@ -8,6 +8,7 @@
 #include <string>
 #include <igl/readPLY.h>
 #include "Cluster.h"
+
 using namespace Eigen;
 
 HeatHook::HeatHook() : PhysicsHook() 
@@ -78,7 +79,6 @@ Vector3d HeatHook::computeCenterOfMass(double volume_) {
 
         cm += term;
     }
-
     return cm / volume_;
 }
 
@@ -298,8 +298,7 @@ void HeatHook::integrateHeat(MatrixXd& ugrad)
     cg.compute(A);
     u = cg.solve(source);
     // Solver::gauss_seidel(A, source, u);
-    std::cout << "solve heat time (s): " << omp_get_wtime() - start << std::endl;
-
+    //std::cout << "solve heat time (s): " << omp_get_wtime() - start << std::endl;
     start = omp_get_wtime();
     // evaluate flow field
     int nfaces = F.rows();
@@ -318,7 +317,7 @@ void HeatHook::integrateHeat(MatrixXd& ugrad)
         ugrad.row(i) /= (e1.cross(e2)).norm(); // divide by area of face
         ugrad.row(i) /= -ugrad.row(i).norm();  // normalize and flip direction
     }
-    std::cout << "compute ugrad time (s): " << omp_get_wtime() - start << std::endl;
+    //std::cout << "compute ugrad time (s): " << omp_get_wtime() - start << std::endl;
 }
 
 void HeatHook::solveDistance(const MatrixXd& ugrad) 
@@ -339,27 +338,31 @@ void HeatHook::solveDistance(const MatrixXd& ugrad)
             div[face[j]] += 0.5*(cot1*(e1.dot(ugrad.row(i))) + cot2*(e2.dot(ugrad.row(i))));
         }
     }
-    std::cout << "div computation time (s): " << omp_get_wtime() - start << std::endl;
+    // std::cout << "div computation time (s): " << omp_get_wtime() - start << std::endl;
     // Solve for distance
     start = omp_get_wtime();
-
     VectorXd u(phi.size());
     u.setZero();
-    Solver asdf;
-    asdf.multigrid_init(V,F);
-    asdf.multigrid(L, div, u);
-    phi = u;
+    solver.multigrid(L, div, u);
+    phi = -u;
+    std::cout << "solve dist time -- multigrid (s): " << omp_get_wtime() - start << std::endl;
+
+    start = omp_get_wtime();
+    u.setZero();
+    double err = solver.gauss_seidel(L, div, u, 100, true);
+    phi = -u;
+    std::cout << "gauss-seidel error: " << err << std::endl;
+    std::cout << "solve dist time -- gauss-seidel (s): " << omp_get_wtime() - start << std::endl;
     //std::cout << "Vsub.size(): " << asdf.Vsub[5].rows() << std::endl;
     //std::cout << "Fsub.size(): " << asdf.Fsub[5].rows() << std::endl;
     //std::cout << "pihsub: " << asdf.phisub[asdf.phisub.size()-7].size() << std::endl;
     //V = asdf.Vsub[5];
     //F = asdf.Fsub[5];
     //phi = asdf.phisub[asdf.phisub.size()-7];
-
     //ConjugateGradient<SparseMatrix<double>, Lower|Upper> cg;
     //cg.compute(L);
     //phi = cg.solve(div);
-    std::cout << "solve dist time (s): " << omp_get_wtime() - start << std::endl;
+    //std::cout << "cg error: " << cg.error() << std::endl;
 }
 
 
@@ -367,10 +370,10 @@ void HeatHook::initSimulation()
 {
     Eigen::initParallel();
     std::cout << "Num threads: " << Eigen::nbThreads() << std::endl;
-    //#pragma omp parallel
-    //{
-    //    std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
-    //}
+    #pragma omp parallel
+    {
+        std::cout << "Thread num: " << omp_get_thread_num() << std::endl;
+    }
 
 	std::string meshfname = std::string("../meshes/") + meshFile_;
     std::string ext = meshFile_.substr(meshFile_.find_last_of(".")+1);
@@ -403,14 +406,17 @@ void HeatHook::initSimulation()
     prevClicked = -1;
     V *= 10;
 
-    // solver.multigrid_init(V,F);
+    double volume = computeVolume();
+    Vector3d cm = computeCenterOfMass(volume);
+    std::cout << "CM: " << cm << std::endl;
+    for (int i = 0; i < V.rows(); i++)
+        V.row(i) -= cm;
 
     L = SparseMatrix<double>(V.rows(), V.rows());
     double start;
     start = omp_get_wtime();
     buildCotanLaplacian(L);
-
-    std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
+    // std::cout << "cot & mass matrix time (s): " << omp_get_wtime() - start << std::endl;
     source = VectorXd::Zero(V.rows());
     phi    = VectorXd::Zero(V.rows());
 
@@ -419,25 +425,17 @@ void HeatHook::initSimulation()
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, Morig);
     igl::massmatrix(V, F, igl::MASSMATRIX_TYPE_DEFAULT, M);
 
-    //double volume = computeVolume();
-    //Vector3d cm = computeCenterOfMass(volume);
-    //std::cout << "CM: " << cm << std::endl;
-    //for (int i = 0; i < V.rows(); i++)
-    //    V.row(i) -= cm;
     geodesic_dt = 5.0*M.diagonal().sum()/F.rows();
-
-    //solver.multigrid_init(V,F);
-    // solver.multigrid_init(V,F);
-
-//    Cluster cluster(F, 69, V.rows());
-//    cluster.BFS();
-//    int n = 0;
-//    for(unordered_set<int> set : cluster.cluster_map_true) {
-//        for (int i : set) {
-//            phi[i] = n/4.0;
-//        }
-//        ++n;
-//    }
+    solver.multigrid_init(V,F);
+    //Cluster cluster(F, 8, V.rows());
+    //cluster.BFS();
+    //int n = 0;
+    //for(unordered_set<int> set : cluster.cluster_map_true) {
+    //    for (int i : set) {
+    //        phi[i] = n/8.0;
+    //    }
+    //    ++n;
+    //}
 }
 bool HeatHook::simulateOneStep()
 {
@@ -504,10 +502,10 @@ bool HeatHook::simulateOneStep()
         if (clickedVertex != -1 && clickedVertex != prevClicked)
         {
             // Update params
-            //Solver::updateIters(solverIters);
-            //Solver::updateTolerance(solverTol);
-            source[clickedVertex] = 1.0;
-            //std::cout << "clicked: " << clickedVertex << std::endl;
+            // Solver::updateIters(solverIters);
+            // Solver::updateTolerance(solverTol);
+            // source[clickedVertex] = 1.0;
+            source[1] = 1.0;
             int nfaces = F.rows();
             MatrixXd ugrad(nfaces, 3);
             integrateHeat(ugrad);
